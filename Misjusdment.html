@@ -1,0 +1,2437 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AOI Misjudgment System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #f3f6fb; --surface: #ffffff; --surface2: #f5f7fb;
+    --text: #10213a; --text2: #4b5d75; --muted: #7c8ba1;
+    --border: rgba(31,55,86,0.10); --radius: 14px;
+    --ok: #0da678; --bad: #e64b4b; --brand:#246bfd; --brand2:#6d5dfc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: radial-gradient(circle at 10% 0%,#e8efff 0,transparent 28%),var(--bg); color: var(--text); min-height: 100vh; }
+  header { background: rgba(255,255,255,.94); backdrop-filter:blur(16px); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; position:relative;z-index:30;box-shadow:0 8px 30px rgba(26,55,96,.05); }
+  .header-left h1 { font-size: 19px; font-weight: 700; letter-spacing:-.02em; }
+  .header-left .dev { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .meta { font-size: 12px; color: var(--muted); }
+  #statusBadge { font-size: 11px; padding: 4px 10px; border-radius: 20px; background: #e1f5ee; color: #0f6e56; }
+  #statusBadge.loading { background: #faeeda; color: #854f0b; }
+  #statusBadge.error { background: #fcebeb; color: #a32d2d; }
+  .main { max-width: 1240px; margin: 0 auto; padding: 1.6rem; }
+  .main.app-shell { max-width:1240px;display:block; }
+  .app-content { min-width:0; }
+  .menu-toggle { display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:#fff;color:var(--text2);border-radius:12px;padding:8px 12px;font:600 12px/1 inherit;cursor:pointer;box-shadow:0 5px 16px rgba(31,55,86,.06); }
+  .menu-toggle:hover { border-color:var(--brand);color:var(--brand); }
+  .menu-icon { font-size:17px;line-height:1; }
+  .workspace-sidebar { position:fixed!important;left:0;top:0;bottom:0;width:270px;z-index:100;padding:18px!important;border-radius:0 18px 18px 0!important;transform:translateX(-105%);transition:transform .24s ease;overflow-y:auto;box-shadow:18px 0 50px rgba(16,33,58,.22)!important; }
+  .workspace-sidebar.open { transform:translateX(0); }
+  .workspace-overlay { position:fixed;inset:0;background:rgba(10,22,42,.42);backdrop-filter:blur(2px);z-index:90;opacity:0;pointer-events:none;transition:opacity .2s ease; }
+  .workspace-overlay.open { opacity:1;pointer-events:auto; }
+  .sidebar-top { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px; }
+  .sidebar-close { width:32px;height:32px;border:0;border-radius:9px;background:var(--surface2);color:var(--text2);font-size:18px;cursor:pointer; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; margin-bottom: 1.5rem; }
+  .kpi { background: linear-gradient(145deg,#fff,#fbfcff); border-radius: var(--radius); padding: 1.15rem 1.3rem; border: 1px solid var(--border); box-shadow:0 10px 28px rgba(31,55,86,.07); position:relative; overflow:hidden; }
+  .kpi::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:linear-gradient(180deg,var(--brand),var(--brand2)); }
+  .kpi-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .kpi-val { font-size: 28px; font-weight: 750; letter-spacing:-.035em; }
+  .kpi-val.ok { color: var(--ok); }
+  .kpi-val.bad { color: var(--bad); }
+  .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .insights-card { background:linear-gradient(135deg,#122443,#1d3970 62%,#4438a3);color:#fff;border:0;overflow:hidden;position:relative; }
+  .insights-card::after { content:'';position:absolute;width:280px;height:280px;border-radius:50%;right:-100px;top:-160px;background:rgba(255,255,255,.08); }
+  .insights-head { display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:15px;position:relative;z-index:1; }
+  .insights-title { font-size:15px;font-weight:800;letter-spacing:-.01em; }
+  .insights-subtitle { font-size:11px;color:rgba(255,255,255,.65);margin-top:3px; }
+  .insights-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;position:relative;z-index:1; }
+  .insight { padding:14px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.11);border-radius:12px;backdrop-filter:blur(8px); }
+  .insight-top { display:flex;align-items:center;gap:7px;color:rgba(255,255,255,.68);font-size:10px;text-transform:uppercase;letter-spacing:.06em; }
+  .insight-icon { display:grid;place-items:center;width:24px;height:24px;border-radius:8px;background:rgba(255,255,255,.13);font-size:13px; }
+  .insight-value { font-size:21px;font-weight:800;letter-spacing:-.03em;margin-top:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .insight-detail { font-size:11px;color:rgba(255,255,255,.68);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .card { background: rgba(255,255,255,.94); border-radius: var(--radius); border: 1px solid var(--border); padding: 1.35rem; margin-bottom: 1.25rem; box-shadow:0 12px 34px rgba(31,55,86,.065); }
+  .card-title { font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .pill { font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); cursor: pointer; background: var(--surface2); color: var(--text2); transition: all 0.15s; font-family: inherit; }
+  .pill:hover { border-color: #888; }
+  .pill.active { background: linear-gradient(135deg,var(--brand),var(--brand2)); color: #fff; border-color: transparent; box-shadow:0 5px 14px rgba(36,107,253,.22); }
+  .controls-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 1rem; }
+  .controls-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 1rem; }
+  .legend-item { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; color: var(--text2); padding: 3px 6px; border-radius: 4px; }
+  .legend-item.hidden { opacity: 0.35; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .chart-wrap { position: relative; width: 100%; height: 340px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .bar-label { font-size: 13px; font-weight: 500; width: 30px; flex-shrink: 0; }
+  .bar-outer { flex: 1; background: var(--surface2); border-radius: 4px; height: 24px; overflow: hidden; position: relative; }
+  .bar-inner { height: 100%; border-radius: 4px 0 0 4px; display: flex; align-items: center; padding-left: 8px; font-size: 11px; color: #fff; font-weight: 500; transition: width 0.5s ease; }
+  .target-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--muted); opacity: 0.7; z-index:2; }
+  .bar-pct { font-size: 13px; font-weight: 500; width: 50px; text-align: right; flex-shrink: 0; }
+  .bar-target { font-size: 11px; color: var(--muted); width: 60px; flex-shrink: 0; }
+  .heat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .heat-table th { padding: 6px 10px; color: var(--muted); font-weight: 400; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .heat-table td { padding: 5px 8px; text-align: center; border-radius: 4px; }
+  .heat-table td.line-name { text-align: left; font-weight: 500; padding-left: 0; }
+  .heat-scroll { width:100%;overflow-x:auto;padding-bottom:8px;scrollbar-color:#b8c4d6 transparent; }
+  .heat-scroll .heat-table { min-width:max-content; }
+  .heat-scroll .heat-table th:not(:first-child),.heat-scroll .heat-table td:not(:first-child) { min-width:72px; }
+  .heat-scroll .heat-table th:first-child,.heat-scroll .heat-table td:first-child { position:sticky;left:0;z-index:2;background:var(--surface);min-width:58px;padding-left:8px; }
+  .heat-legend { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; font-size: 11px; color: var(--muted); align-items: center; }
+  .heat-swatch { padding: 2px 8px; border-radius: 3px; }
+  .reload-btn { font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); cursor: pointer; background: var(--surface); color: var(--text2); font-family: inherit; }
+  .reload-btn:hover { border-color: #2a78d6; color: #2a78d6; }
+  .url-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .url-input { flex: 1; min-width: 200px; font-size: 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-family: monospace; background: var(--surface2); color: var(--text); outline: none; }
+  .url-input:focus { border-color: #2a78d6; }
+  select.filter-select { font-size: 12px; padding: 5px 10px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); color: var(--text2); font-family: inherit; cursor: pointer; outline: none; }
+  select.filter-select:focus { border-color: #2a78d6; }
+  .multi-filter { position:relative; min-width:230px; }
+  .multi-filter-trigger { width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;padding:7px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:inherit;cursor:pointer; }
+  .multi-filter-trigger:hover,.multi-filter.open .multi-filter-trigger { border-color:var(--brand);background:#fff; }
+  .multi-filter-panel { display:none;position:absolute;top:calc(100% + 7px);left:0;z-index:25;width:min(360px,80vw);max-height:310px;overflow:auto;padding:10px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 45px rgba(31,55,86,.18); }
+  .multi-filter.open .multi-filter-panel { display:block; }
+  .multi-filter-option { display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:9px;font-size:12px;color:var(--text2);cursor:pointer; }
+  .multi-filter-option:hover { background:var(--surface2); }
+  .multi-filter-option input { accent-color:var(--brand);width:15px;height:15px; }
+  .multi-filter-all { border-bottom:1px solid var(--border);margin-bottom:5px;padding-bottom:9px;font-weight:700;color:var(--text); }
+  .daily-date-filter { display:flex;align-items:center;gap:7px; }
+  .daily-date-filter input { font-size:12px;padding:6px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:inherit;outline:none; }
+  .daily-date-filter input:focus { border-color:var(--brand);background:#fff; }
+  .clear-date-btn { border:0;background:transparent;color:var(--brand);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fac775; border-top-color: #854f0b; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 4px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .filter-label { font-size: 12px; color: var(--muted); }
+
+  .sheet-footer { text-align: center; margin: 1.5rem 0 0; font-size: 12px; color: var(--muted); }
+  .sheet-footer a { color: #2a78d6; text-decoration: none; font-weight: 500; }
+  .sheet-footer a:hover { text-decoration: underline; }
+  .sheet-link-btn { border:0; background:transparent; color:#2a78d6; text-decoration:none; font-weight:500; font-family:inherit; font-size:12px; cursor:pointer; padding:0; }
+  .sheet-link-btn:hover { text-decoration:underline; }
+  .source-status { font-size:11px; color:var(--muted); margin-top:8px; }
+  .url-input:disabled { opacity:.7; cursor:not-allowed; }
+
+
+  /* ── Navegación AOI System ───────────────────────────────── */
+  .app-tabs { display:flex; gap:10px; margin-bottom:1.25rem; position:static; background:transparent; padding:0; }
+  .app-tab { flex:1; border:1px solid var(--border); background:var(--surface); color:var(--text2); border-radius:14px; padding:12px 14px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .app-tab.active { background:linear-gradient(135deg,var(--brand),var(--brand2)); color:white; border-color:transparent; box-shadow:0 8px 20px rgba(36,107,253,.2); }
+  .source-chip { display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:#edf3ff;color:#2459b8;font-size:11px;font-weight:700; }
+  .source-chip::before { content:'';width:7px;height:7px;border-radius:50%;background:#21b47e;box-shadow:0 0 0 4px rgba(33,180,126,.12); }
+  .all-highlight { color:var(--brand2)!important;font-weight:800!important; }
+  .page-section { display:none; }
+  .page-section.active { display:block; }
+  .report-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:1rem; }
+  .report-tab { border:1px solid var(--border); background:var(--surface2); color:var(--text2); border-radius:20px; padding:8px 14px; font-size:12px; cursor:pointer; font-family:inherit; }
+  .report-tab.active { background:#2a78d6; color:#fff; border-color:#2a78d6; }
+  .reports-layout { display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start; }
+  .reports-sidebar { position:sticky;top:18px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px;box-shadow:0 12px 34px rgba(31,55,86,.065); }
+  .sidebar-brand { padding:8px 9px 13px;font-size:14px;font-weight:800;color:var(--text); }
+  .sidebar-group { margin-top:8px;padding-top:10px;border-top:1px solid var(--border); }
+  .sidebar-label { padding:0 9px 7px;font-size:10px;font-weight:800;color:var(--muted);letter-spacing:.09em;text-transform:uppercase; }
+  .reports-sidebar .report-tab { width:100%;display:flex;align-items:center;gap:9px;text-align:left;border:0;border-radius:9px;padding:10px;background:transparent;margin:2px 0; }
+  .reports-sidebar .report-tab:hover { background:var(--surface2); }
+  .reports-sidebar .report-tab.active { background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 7px 18px rgba(36,107,253,.2); }
+  .workspace-sidebar .workspace-nav { width:100%;display:flex;align-items:center;gap:9px;text-align:left;border:0;border-radius:9px;padding:10px;background:transparent;margin:2px 0;color:var(--text2);font-family:inherit;font-size:12px;cursor:pointer; }
+  .workspace-sidebar .workspace-nav:hover { background:var(--surface2); }
+  .workspace-sidebar .workspace-nav.active { background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 7px 18px rgba(36,107,253,.2); }
+  .workspace-nav-parent { justify-content:space-between!important; }
+  .workspace-nav-parent .nav-parent-label { display:flex;align-items:center;gap:9px; }
+  .submenu-arrow { transition:transform .18s ease;font-size:11px; }
+  .workspace-nav-parent.open .submenu-arrow { transform:rotate(90deg); }
+  .sidebar-submenu { display:none;margin:4px 0 5px 13px;padding-left:10px;border-left:1px solid var(--border); }
+  .sidebar-submenu.open { display:block; }
+  .workspace-sidebar .sidebar-submenu .workspace-nav { padding:8px 9px;font-size:11px; }
+  .reports-content { min-width:0; }
+  .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
+  .form-field { display:flex; flex-direction:column; gap:5px; }
+  .form-field label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .form-field input, .form-field select, .form-field textarea { width:100%; border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:13px; font-family:inherit; background:var(--surface2); color:var(--text); outline:none; }
+  .form-field textarea { min-height:78px; resize:vertical; }
+  .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color:#2a78d6; background:#fff; }
+  .report-section { display:none; }
+  .report-section.active { display:block; }
+  .line-checklist { display:grid; grid-template-columns:repeat(auto-fit,minmax(245px,1fr)); gap:10px; }
+  .line-card { border:1px solid var(--border); border-radius:10px; padding:12px; background:var(--surface); }
+  .line-card-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-weight:600; font-size:13px; }
+  .line-card .mini-grid { display:grid; grid-template-columns:85px 1fr; gap:8px; align-items:center; }
+  .line-card label { font-size:11px; color:var(--muted); }
+  .line-card select, .line-card input { width:100%; border:1px solid var(--border); border-radius:7px; padding:7px 8px; font-size:12px; background:var(--surface2); }
+  .actions-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .primary-btn, .secondary-btn { border:1px solid var(--border); border-radius:20px; padding:9px 15px; font-size:12px; cursor:pointer; font-family:inherit; }
+  .primary-btn { background:#2a78d6; border-color:#2a78d6; color:white; }
+  .secondary-btn { background:var(--surface2); color:var(--text2); }
+  .note-box { background:#f7fbff; border:1px solid #cfe4ff; color:#27577f; border-radius:10px; padding:12px; font-size:12px; margin-bottom:1rem; }
+  .split-title { font-size:12px; color:var(--text2); font-weight:600; margin:1rem 0 .75rem; text-transform:uppercase; letter-spacing:.04em; }
+  @media (max-width:650px) { header { padding:1rem; } .main { padding:1rem; } .app-tabs { position:static; } .app-tab { font-size:13px; padding:10px; } .line-checklist { grid-template-columns:1fr; } }
+  @media (max-width:850px) { .insights-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:800px) { .reports-layout { grid-template-columns:1fr; } .reports-sidebar { position:static;display:grid;grid-template-columns:1fr 1fr;gap:8px; } .sidebar-brand { grid-column:1/-1; } .sidebar-group { margin:0;padding:0;border:0; } }
+  @media (max-width:520px) { .workspace-sidebar { width:min(88vw,290px); } .menu-toggle-label { display:none; } }
+  @media (max-width:520px) { .insights-grid { grid-template-columns:1fr; } }
+
+
+  .field-help { display:block; font-size:11px; color:var(--muted); margin-top:5px; }
+  .adjustments-box { display:flex; flex-direction:column; gap:8px; }
+  .adjustment-row { display:grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap:8px; align-items:end; padding:10px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); }
+  .adjustment-row label { font-size:11px; color:var(--muted); margin-bottom:4px; display:block; }
+  .small-btn { padding:6px 10px; font-size:12px; margin-top:8px; }
+  .danger-btn { border:1px solid rgba(227,73,72,.25); color:#a32d2d; background:#fcebeb; border-radius:8px; padding:7px 10px; cursor:pointer; }
+  @media (max-width: 720px) { .adjustment-row { grid-template-columns:1fr; } }
+  .template-checklist { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:10px; }
+  .template-item { border:1px solid var(--border); border-radius:10px; padding:12px; background:var(--surface); }
+  .template-item.required { border-left:4px solid #2a78d6; }
+  .template-item.optional { border-left:4px solid #b9b7b0; }
+  .template-item-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+  .template-item-title { font-size:13px; font-weight:600; color:var(--text); }
+  .required-badge { font-size:10px; color:#27577f; background:#e7f2ff; border:1px solid #cfe4ff; padding:3px 7px; border-radius:12px; white-space:nowrap; }
+  .optional-badge { font-size:10px; color:var(--muted); background:var(--surface2); border:1px solid var(--border); padding:3px 7px; border-radius:12px; white-space:nowrap; }
+  .template-item-row { display:grid; grid-template-columns:85px 1fr; gap:8px; align-items:center; margin-top:6px; }
+  .template-item-row label { font-size:11px; color:var(--muted); }
+  .template-item-row select, .template-item-row input { width:100%; border:1px solid var(--border); border-radius:7px; padding:7px 8px; font-size:12px; background:var(--surface2); }
+  .destino-checks { display:flex; gap:12px; flex-wrap:wrap; padding:10px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; }
+  .destino-checks label { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text2); text-transform:none; letter-spacing:0; }
+  .line-card.saved { border-color:rgba(27,175,122,.45); background:#f0fbf7; }
+  .line-card.uploading { border-color:#fac775; background:#fffaf0; }
+  .line-status { font-size:11px; color:var(--muted); margin-top:8px; }
+  .line-card.saved .line-status { color:#0f6e56; font-weight:600; }
+  .line-card.uploading .line-status { color:#854f0b; font-weight:600; }
+  .line-card-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .download-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+  .download-card { border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--surface); }
+  .download-title { font-size:14px; font-weight:600; color:var(--text); margin-bottom:6px; }
+  .download-text { font-size:12px; color:var(--muted); line-height:1.4; margin-bottom:12px; }
+  .download-actions { display:flex; flex-wrap:wrap; gap:8px; }
+  .download-status { display:inline-flex; align-items:center; min-height:22px; padding:3px 8px; border-radius:12px; font-size:10px; margin-bottom:10px; background:#e1f5ee; color:#0f6e56; }
+  .download-status.pending { background:#faeeda; color:#854f0b; }
+  .report-builder { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; align-items:end; margin-bottom:14px; }
+  .report-preview { border:1px solid var(--border); border-radius:8px; background:var(--surface2); padding:12px; font-size:12px; color:var(--text2); margin-top:12px; }
+  .report-preview strong { color:var(--text); }
+
+  /* Override intencional: .card se declara después de los estilos de Datazos. */
+  .card.insights-card { background:linear-gradient(135deg,#122443,#1d3970 62%,#4438a3);color:#fff;border:0;min-height:0;height:auto;padding:1.35rem; }
+  .card.insights-card .insights-title,.card.insights-card .insight-value { color:#fff; }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>AOI Misjudgment System</h1>
+    <div class="dev">Dashboard AOI Misjudgment | Desarrollado por Anyelo Puebla</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <button class="menu-toggle" type="button" onclick="toggleWorkspaceMenu(true)" aria-label="Open navigation menu"><span class="menu-icon">☰</span><span class="menu-toggle-label">Menu</span></button>
+    <div class="meta" id="lastUpdate">Sin datos cargados</div>
+    <span id="statusBadge" class="loading">Cargando…</span>
+    <button class="reload-btn" onclick="loadData()">↻ Actualizar</button>
+  </div>
+</header>
+
+<div class="main app-shell">
+  <aside class="reports-sidebar workspace-sidebar" aria-label="AOI workspace navigation">
+    <div class="sidebar-top"><div class="sidebar-brand">AOI Workspace</div><button class="sidebar-close" type="button" onclick="toggleWorkspaceMenu(false)" aria-label="Close menu">×</button></div>
+    <div class="sidebar-group">
+      <div class="sidebar-label">Overview</div>
+      <button class="workspace-nav active" onclick="openWorkspaceSection('dashboardPage',null,this)">▦ AOI Dashboard</button>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-label">Records</div>
+      <button class="workspace-nav" onclick="openWorkspaceSection('reportesPage','checklistReport',this)">✓ Shift Checklist</button>
+      <button class="workspace-nav" onclick="openWorkspaceSection('reportesPage','cambiosReport',this)">↻ Change Record</button>
+      <button class="workspace-nav" onclick="openWorkspaceSection('reportesPage','templatesReport',this)">▦ Template Record</button>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-label">Reports</div>
+      <button class="workspace-nav workspace-nav-parent" id="reportCenterToggle" onclick="toggleReportSubmenu(event,this)" aria-expanded="false"><span class="nav-parent-label">▤ Report Center</span><span class="submenu-arrow">›</span></button>
+      <div class="sidebar-submenu" id="reportCenterSubmenu">
+        <button class="workspace-nav" onclick="openReportCenterType('misjudgments',this)">Misjudgments</button>
+        <button class="workspace-nav" onclick="openReportCenterType('checklist',this)">Shift Checklist</button>
+        <button class="workspace-nav" onclick="openReportCenterType('cambios',this)">Change Records</button>
+        <button class="workspace-nav" onclick="openReportCenterType('templates',this)">Template Records</button>
+      </div>
+    </div>
+    <div class="sidebar-group"><button class="sheet-link-btn" type="button" onclick="openProtectedSheet('checklist')">Open records database ↗</button></div>
+  </aside>
+  <div class="workspace-overlay" id="workspaceOverlay" onclick="toggleWorkspaceMenu(false)"></div>
+  <div class="app-content">
+  <section id="dashboardPage" class="page-section active">
+
+  <!-- URL config -->
+  <div class="card" id="dataSourceCard">
+    <div class="card-title" style="display:flex;justify-content:space-between;gap:10px;align-items:center;">Data Sources <span class="source-chip">3 sheets synced</span></div>
+    <div class="url-bar">
+      <input class="url-input" id="csvUrl" type="text" disabled
+        value="https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3eXbLC59lYBQznLL4szR93QgcYBHYSJihzane32WLp-Az4-8Topr0VH5AiD3fhWXLl0uJw20OEg7/pub?gid=479386735&single=true&output=csv"
+        placeholder="URL CSV de Google Sheets…" />
+      <button class="pill" type="button" onclick="unlockDataSource()">Unlock</button>
+      <button class="pill active" id="loadDataSourceBtn" onclick="loadProtectedDataSource()" disabled>Load</button>
+    </div>
+    <div class="source-status" id="dataSourceStatus">Fuente bloqueada.</div>
+    <p style="font-size:11px;color:var(--muted);margin-top:8px;">Link CSV de "Publicar en la web" de Google Sheets.</p>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid" id="kpiGrid">
+    <div class="kpi"><div class="kpi-label">Esperando datos</div><div class="kpi-val">—</div></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="card">
+    <!-- Vista + periodo + filtro mes/semana -->
+    <div class="controls-row">
+      <span class="filter-label">View:</span>
+      <button class="pill active" onclick="setView('trend',this)">Trend</button>
+      <button class="pill" onclick="setView('bars',this)">By Line</button>
+      <button class="pill" onclick="setView('heat',this)">Heatmap</button>
+      <div class="controls-sep"></div>
+      <span class="filter-label">Period:</span>
+      <button class="pill" id="btnGeneral" onclick="setPeriod('general',this)">Daily Overview</button>
+      <button class="pill active" id="btnMensual" onclick="setPeriod('mensual',this)">Monthly</button>
+      <button class="pill" id="btnSemanal" onclick="setPeriod('semanal',this)">Weekly</button>
+      <div class="controls-sep"></div>
+      <div class="daily-date-filter" id="dailyDateFilter" style="display:none">
+        <input id="dailyDateInput" type="date" aria-label="Select daily date" onchange="onDailyDateChange()">
+        <button class="clear-date-btn" type="button" onclick="clearDailyDate()">All Days</button>
+      </div>
+      <div class="multi-filter" id="filterSelect" style="display:none">
+        <button class="multi-filter-trigger" type="button" onclick="toggleMultiFilter(event)"><span id="multiFilterLabel">Todos</span><span>▾</span></button>
+        <div class="multi-filter-panel" id="multiFilterPanel"></div>
+      </div>
+    </div>
+
+    <div class="legend" id="legendBox"></div>
+
+    <div id="trendView"><div class="chart-wrap"><canvas id="mainChart" role="img" aria-label="Tasa Misjusdments por línea"></canvas></div></div>
+    <div id="barsView" style="display:none;"></div>
+    <div id="heatView" style="display:none;"></div>
+  </div>
+
+  <div class="card insights-card" id="insightsCard">
+    <div class="insights-head"><div><div class="insights-title">AOI Performance Insights</div><div class="insights-subtitle">Actionable metrics for the selected period</div></div></div>
+    <div class="insights-grid" id="insightsGrid"><div class="insight">Esperando datos…</div></div>
+  </div>
+
+
+  <div class="sheet-footer">
+    <button class="sheet-link-btn" type="button" onclick="openProtectedSheet('misjudgments')">Open database in Google Sheets</button>
+    <div style="margin-top:6px;">Automatic refresh every minute.</div>
+  </div>
+
+  </section>
+
+  <section id="reportesPage" class="page-section">
+
+    <div id="checklistReport" class="report-section active">
+      <div class="card">
+        <div class="card-title">Datos generales</div>
+        <div class="form-grid">
+          <div class="form-field"><label>Fecha</label><input id="chkFecha" type="date"></div>
+          <div class="form-field"><label>Hora</label><input id="chkHora" type="time"></div>
+          <div class="form-field"><label>Turno</label><select id="chkTurno"><option>Día</option><option>Noche</option></select></div>
+          <div class="form-field"><label>Responsable</label><select id="chkResponsable"><option value="">Selecciona responsable</option><option>Issac B</option><option>Anyelo C</option><option>Gerardo C</option><option>Heidy L</option></select></div>
+          <div class="form-field" style="grid-column:1/-1"><label>Comentario general</label><textarea id="chkComentario" placeholder="Comentarios generales del inicio de turno..."></textarea></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Evidencia por línea L1 - L13</div>
+        <div class="line-checklist" id="lineChecklistBox"></div>
+        <div class="actions-row">
+          <button class="primary-btn" onclick="saveChecklistReport()">Guardar checklist</button>
+          <button class="secondary-btn" onclick="clearChecklist()">Limpiar formulario</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cambiosReport" class="report-section">
+      <div class="card">
+        <div class="card-title">Registro de cambios AOI / Template</div>
+        <div class="form-grid">
+          <div class="form-field"><label>Fecha</label><input id="chgFecha" type="date"></div>
+          <div class="form-field"><label>Hora</label><input id="chgHora" type="time"></div>
+          <div class="form-field"><label>Turno</label><select id="chgTurno"><option>Día</option><option>Noche</option></select></div>
+          <div class="form-field"><label>Responsable</label><select id="chgResponsable"><option value="">Selecciona responsable</option><option>Issac B</option><option>Anyelo C</option><option>Gerardo C</option><option>Heidy L</option></select></div>
+          <div class="form-field"><label>Línea</label><select id="chgLinea"><option value="">Selecciona línea</option><option>L1</option><option>L2</option><option>L3</option><option>L4</option><option>L5</option><option>L6</option><option>L7</option><option>L8</option><option>L9</option><option>L10</option><option>L11</option><option>L12</option><option>L13</option></select></div>
+          <div class="form-field"><label>Modelo interno</label><input id="modeloInterno" list="modelosInternosList" placeholder="Escribe para buscar. Ej. 75NU" oninput="filterModelOptions()"><datalist id="modelosInternosList"></datalist><small id="modelDbStatus" class="field-help">Cargando base de modelos…</small></div>
+          <div class="form-field"><label>Modelo externo</label><select id="modeloExterno"><option value="">Primero escribe modelo interno</option></select></div>
+          <div class="form-field"><label>Destino</label><select id="destino"><option value="">Selecciona destino</option><option>CO</option><option>US</option><option>MX</option><option>GT</option></select></div>
+        </div>
+
+        <div class="split-title">Tipo de reporte</div>
+        <div class="form-grid">
+          <div class="form-field"><label>Tipo de cambio</label><select id="tipoCambio"><option>Cambio de parámetro AOI</option><option>Configuración interna</option><option>Corrección a PFA</option><option>Ajuste de template</option><option>Otro</option></select></div>
+          <div class="form-field"><label>¿Se corrigió algo a PFA?</label><select id="pfa"><option>No</option><option>Sí</option></select></div>
+          <div class="form-field" style="grid-column:1/-1"><label>Comentario PFA</label><textarea id="comentarioPfa" placeholder="Describe si se corrigió posición, SOP, tape, cable, washer, etc."></textarea></div>
+        </div>
+
+        <div class="split-title">Detalle del cambio</div>
+        <div class="form-grid">
+          <div class="form-field"><label>Objeto del template</label><select id="objetoTemplate"><option value="">Selecciona objeto</option><option>FrontLocal</option><option>SideLocal</option><option>electric cloth</option><option>non woven</option><option>white cable clamp</option><option>S plate bracket</option><option>white S plate bracket</option><option>cable management</option><option>signal transmitting wire connection</option><option>speaker</option><option>internal antenna</option><option>barcode recognition</option><option>adhesive tape</option><option>masking tape</option><option>wall mounted bracket</option><option>light shielding gasket</option><option>black cable clamp</option><option>gel</option><option>rubber</option><option>terminal board clamp</option><option>character recognition</option><option>PCB clamp</option><option>black label</option><option>mask label</option><option>machine changed</option><option>The base adapter bracket is wrong</option><option>screw bask bracket</option><option>T-Hole</option><option>Triangular-Hole</option><option>Rectangular-Hole</option><option>base bracket L</option><option>base bracket T</option><option>power supply wire connection</option><option>FFC connection</option><option>internal screw</option><option>Front Screw(old)</option><option>base bracket</option><option>Back Screw</option><option>a cable clamp</option><option>bask bracket screw</option><option>type 61 bask bracket</option><option>type 62 bask bracket</option><option>wifi board</option><option>power socket</option><option>foreign masking tape</option><option>black screw</option><option>WIFI terminal</option><option>lug boss</option><option>Reflux Machine</option><option>SN</option><option>ROI</option><option>WholeOrPart</option></select></div>
+          <div class="form-field"><label>Objeto exacto / número</label><input id="objetoExacto" placeholder="Ej. FrontLocal32, SideLocal11, character recognition 3"></div>
+          <div class="form-field"><label>Parámetro de detección</label><select id="parametro"><option value="">Selecciona parámetro de detección</option><option>AI algorithm</option><option>Search template</option><option>High temperature resistant tape</option><option>Detect conductive cloth</option><option>Measurement connector</option><option>Color segmentation</option><option>Detect SN code</option><option>Detect OCR</option><option>Create template</option><option>Positioning template</option><option>AI measurement</option><option>Multi-channel extraction</option><option>Complete machine parts inspection</option><option>ROI Area</option><option>Feature points detection</option><option>Find line by color</option><option>Find line by color in AI</option><option>AI Multi-channel extraction</option><option>AIColorSegmentation</option><option>Bracket LocatPoint Template</option><option>Bracket Screw Arithmetic</option><option>Current Plug-In Detection Arithmetic</option><option>Bracket Detection Arithmetic</option><option>AI Bracket Screw Arithmetic</option><option>Brack Color Multi Channel Arithmetic</option><option>Wire detection algorithms</option><option>BrackColorSegmentArithmetic</option></select></div>
+          <div class="form-field" style="grid-column:1/-1"><label>Ajustes realizados</label><div id="ajustesBox" class="adjustments-box"></div><button type="button" class="secondary-btn small-btn" onclick="addAdjustmentRow()">+ Agregar otro ajuste</button><small class="field-help">Puedes registrar varios ajustes en el mismo reporte, por ejemplo rango inferior, rango superior y gap.</small></div>
+          <div class="form-field" style="grid-column:1/-1"><label>Motivo del cambio</label><textarea id="motivo" placeholder="Por qué se realizó el cambio..."></textarea></div>
+          <div class="form-field" style="grid-column:1/-1"><label>Acción realizada</label><textarea id="accion" placeholder="Qué se hizo exactamente..."></textarea></div>
+          <div class="form-field" style="grid-column:1/-1"><label>Resultado esperado</label><textarea id="resultado" placeholder="Qué resultado se espera después del ajuste..."></textarea></div>
+        </div>
+
+        <div class="split-title">Evidencia</div>
+        <div class="form-grid">
+          <div class="form-field"><label>Foto antes / tomar foto</label><input id="fotoAntes" type="file" accept="image/*" capture="environment"></div>
+          <div class="form-field"><label>Foto después / tomar foto</label><input id="fotoDespues" type="file" accept="image/*" capture="environment"></div>
+          <div class="form-field"><label>Archivo / captura adicional</label><input id="archivoExtra" type="file"></div>
+        </div>
+
+        <div class="actions-row">
+          <button class="primary-btn" onclick="saveChangesReport()">Guardar reporte</button>
+          <button class="secondary-btn" onclick="clearChanges()">Limpiar formulario</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="templatesReport" class="report-section">
+      <div class="card">
+        <div class="card-title">Registro de templates</div>
+        <div class="note-box">
+          Checklist para validar que un template nuevo tenga los objetos mínimos requeridos. Puedes marcar los obligatorios y agregar objetos extra si el modelo lo requiere.
+        </div>
+
+        <div class="split-title">Datos generales del template</div>
+        <div class="form-grid">
+          <div class="form-field"><label>Fecha</label><input id="tplFecha" type="date"></div>
+          <div class="form-field"><label>Hora</label><input id="tplHora" type="time"></div>
+          <div class="form-field"><label>Turno</label><select id="tplTurno"><option>Día</option><option>Noche</option></select></div>
+          <div class="form-field"><label>Responsable</label><select id="tplResponsable"><option value="">Selecciona responsable</option><option>Issac B</option><option>Anyelo C</option><option>Gerardo C</option><option>Heidy L</option></select></div>
+          <div class="form-field"><label>Línea</label><select id="tplLinea"><option value="">Selecciona línea</option><option>L1</option><option>L2</option><option>L3</option><option>L4</option><option>L5</option><option>L6</option><option>L7</option><option>L8</option><option>L9</option><option>L10</option><option>L11</option><option>L12</option><option>L13</option></select></div>
+          <div class="form-field"><label>Modelo interno</label><input id="tplModeloInterno" list="modelosInternosList" placeholder="Escribe para buscar. Ej. 75NU" oninput="filterTemplateModelOptions()"><small id="tplModelDbStatus" class="field-help">Usa la misma base de modelos.</small></div>
+          <div class="form-field"><label>Modelo externo</label><select id="tplModeloExterno"><option value="">Primero escribe modelo interno</option></select></div>
+          <div class="form-field" style="grid-column:1/-1"><label>Copias por destino común</label><div class="destino-checks"><label><input type="checkbox" id="tplDestCO"> CO</label><label><input type="checkbox" id="tplDestUS"> US</label><label><input type="checkbox" id="tplDestMX"> MX</label><label><input type="checkbox" id="tplDestGT"> GT</label></div><small class="field-help">Marca los destinos donde ya quedó creada/copiada la configuración del template.</small></div>
+          <div class="form-field" style="grid-column:1/-1"><label>Comentario general</label><textarea id="tplComentario" placeholder="Observaciones del template creado, modelo especial, condiciones adicionales, etc."></textarea></div>
+        </div>
+
+        <div class="split-title">Objetos obligatorios del template</div>
+        <div class="template-checklist" id="templateRequiredBox"></div>
+
+        <div class="split-title">Objetos adicionales / opcionales</div>
+        <div class="template-checklist" id="templateOptionalBox"></div>
+        <div class="actions-row">
+          <button type="button" class="secondary-btn" onclick="addExtraTemplateObject()">+ Agregar objeto extra</button>
+        </div>
+
+        <div class="split-title">Evidencia</div>
+        <div class="form-grid">
+          <div class="form-field"><label>Foto del template creado / tomar foto</label><input id="tplFoto" type="file" accept="image/*" capture="environment"></div>
+          <div class="form-field"><label>Archivo / captura adicional</label><input id="tplArchivoExtra" type="file"></div>
+        </div>
+
+        <div class="actions-row">
+          <button class="primary-btn" onclick="saveTemplateReport()">Guardar template</button>
+          <button class="secondary-btn" onclick="clearTemplateReport()">Limpiar formulario</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="downloadsReport" class="report-section">
+      <div class="card">
+        <div class="card-title" id="reportCenterTitle">Report Center</div>
+        <div class="note-box" id="reportCenterDescription">Choose a report from the navigation menu.</div>
+        <div class="split-title">Visual Report Builder</div>
+        <div class="report-builder">
+          <div class="form-field" id="visualReportTypeField">
+            <label>Report Type</label>
+            <select id="visualReportType" onchange="updateVisualReportPreview()">
+              <option value="misjudgments">Misjudgments</option>
+              <option value="checklist">Checklist</option>
+              <option value="cambios">Cambios</option>
+              <option value="templates">Templates</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Period</label>
+            <select id="visualReportPeriod" onchange="toggleVisualReportInputs(); updateVisualReportPreview();">
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+              <option value="range">Custom Range</option>
+            </select>
+          </div>
+          <div class="form-field visual-date">
+            <label>Fecha</label>
+            <input id="visualReportDate" type="date" onchange="updateVisualReportPreview()">
+          </div>
+          <div class="form-field visual-month" style="display:none">
+            <label>Mes</label>
+            <input id="visualReportMonth" type="month" onchange="updateVisualReportPreview()">
+          </div>
+          <div class="form-field visual-range" style="display:none">
+            <label>Inicio</label>
+            <input id="visualReportStart" type="date" onchange="updateVisualReportPreview()">
+          </div>
+          <div class="form-field visual-range" style="display:none">
+            <label>Fin</label>
+            <input id="visualReportEnd" type="date" onchange="updateVisualReportPreview()">
+          </div>
+        </div>
+        <div class="actions-row" style="margin-top:0;margin-bottom:14px;">
+          <button class="primary-btn" id="visualPdfButton" type="button" onclick="printVisualReport()">Generate Visual PDF</button>
+          <button class="secondary-btn" id="visualCsvButton" type="button" onclick="downloadVisualReportCsv()">Export Excel/CSV</button>
+        </div>
+        <div class="report-preview" id="visualReportPreview">Selecciona un periodo para generar un reporte limpio.</div>
+        <div class="split-title">Full Databases</div>
+        <div class="download-grid" id="downloadReportsGrid"></div>
+      </div>
+    </div>
+  </section>
+  </div>
+</div>
+
+<script>
+const COLORS = ['#2a78d6','#1baf7a','#eda100','#008300','#4a3aa7','#e34948','#e87ba4','#eb6834','#5dc8e0','#a855f7','#f59e0b','#10b981','#64748b','#f97316','#8b5cf6'];
+const PROXIES = [
+  url => url,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://proxy.cors.sh/${url}`
+];
+
+const MODEL_DB_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTbwGt5lL-SSEzu01ym7WwhXSs7RhEeEDpBKI2eh7uVwTvrrAmnJLs4c1KMF7jnjHJCxQnJ1OSKwBAe/pub?gid=1344464590&single=true&output=csv';
+const APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxFuglsm6pZE2j6lRrBA9s1f7MlBTXnwDg7xcFWKe7n1EGNWxa0MnTq3mB6GYE7sK3zCA/exec';
+const PERIOD_SOURCE_URLS = {
+  general: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3eXbLC59lYBQznLL4szR93QgcYBHYSJihzane32WLp-Az4-8Topr0VH5AiD3fhWXLl0uJw20OEg7/pub?gid=479386735&single=true&output=csv',
+  semanal: 'https://docs.google.com/spreadsheets/d/1J-BhCsQ8vPNCzrJAUgsKGgD4RNOdNZO6JayX5CGHXUg/export?format=csv&gid=777989122',
+  mensual: 'https://docs.google.com/spreadsheets/d/1J-BhCsQ8vPNCzrJAUgsKGgD4RNOdNZO6JayX5CGHXUg/export?format=csv&gid=1237990554'
+};
+const SHEET_ACCESS_PASSWORD = 'Anyelo138813';
+const REPORT_DOWNLOADS = {
+  misjudgments: {
+    label: 'Misjudgments',
+    description: 'Datos del dashboard de AOI Misjudgment.',
+    sheetId: '1J-BhCsQ8vPNCzrJAUgsKGgD4RNOdNZO6JayX5CGHXUg'
+  },
+  checklist: {
+    label: 'Checklist inicio de turno',
+    description: 'Reportes guardados desde el checklist L1 - L13.',
+    sheetId: '16bwXw8sx-cKnOIUtrcDkIR2cNwGBlaehFCWJwZu6itk'
+  },
+  cambios: {
+    label: 'Registro de cambios',
+    description: 'Cambios AOI, ajustes de parametros y evidencias.',
+    sheetId: '16bwXw8sx-cKnOIUtrcDkIR2cNwGBlaehFCWJwZu6itk'
+  },
+  templates: {
+    label: 'Registro de templates',
+    description: 'Validacion de templates, objetos obligatorios y evidencias.',
+    sheetId: '16bwXw8sx-cKnOIUtrcDkIR2cNwGBlaehFCWJwZu6itk'
+  }
+};
+let MODEL_DB = [];
+let ajusteCount = 0;
+let extraTemplateObjectCount = 0;
+
+const TEMPLATE_REQUIRED_OBJECTS = [
+  'ROI',
+  'FrontLocal',
+  'Copies for CO / US / MX / GT',
+  'MB screws',
+  'Power connection',
+  'Tapes',
+  'Connections to MB'
+];
+
+const TEMPLATE_OPTIONAL_OBJECTS = [
+  'SideLocal',
+  'internal screw',
+  'Back Screw',
+  'black screw',
+  'FFC connection',
+  'speaker',
+  'internal antenna',
+  'wifi board',
+  'power socket',
+  'cable management',
+  'adhesive tape',
+  'masking tape',
+  'black cable clamp',
+  'white cable clamp',
+  'electric cloth',
+  'non woven',
+  'SN',
+  'barcode recognition',
+  'character recognition'
+];
+
+let DATA = {};
+let DATA_BY_PERIOD = { general:{}, mensual:{}, semanal:{} };
+let hiddenLines = new Set();
+let currentView = 'trend';
+let currentPeriod = 'mensual';
+let currentDailyDate = '';
+const PERIOD_SELECTIONS = { mensual:new Set(), semanal:new Set() };
+let chartInst = null;
+const AUTO_REFRESH_MS = 60000;
+let autoRefreshTimer = null;
+let dataSourceUnlocked = false;
+let CHECKLIST_DRAFT = { meta: {}, lines: {} };
+
+// ── Carga CSV ──────────────────────────────────────────────────
+function addCacheBuster(url) {
+  const sep = url.includes('?') ? '&' : '?';
+  return url + sep + '_=' + Date.now();
+}
+
+async function fetchWithTimeout(resource, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(resource, {
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: { 'Accept': 'text/csv,text/plain,*/*' }
+    });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+async function loadData() {
+  const customDailyUrl = document.getElementById('csvUrl').value.trim();
+  if (!customDailyUrl) return;
+  setStatus('loading','Sincronizando 3 hojas…');
+  document.getElementById('lastUpdate').textContent = 'Actualizando…';
+  const urls = { ...PERIOD_SOURCE_URLS, general: customDailyUrl };
+  const results = await Promise.allSettled(Object.entries(urls).map(async ([period,url]) => {
+    let lastError = '';
+    for (const proxyFn of PROXIES) {
+      try {
+        const res = await fetchWithTimeout(proxyFn(addCacheBuster(url)), 12000);
+        if (!res.ok) { lastError = 'HTTP ' + res.status; continue; }
+        const text = await res.text();
+        if (!text || text.trim().length < 10) { lastError = 'CSV vacío'; continue; }
+        const parsed = parsePeriodCSV(text, period);
+        if (!Object.keys(parsed).length) { lastError = 'Sin filas válidas'; continue; }
+        DATA_BY_PERIOD[period] = parsed;
+        return period;
+      } catch(e) { lastError = e?.message || 'Error de conexión'; }
+    }
+    throw new Error(`${period}: ${lastError}`);
+  }));
+  DATA = DATA_BY_PERIOD[currentPeriod] || {};
+  const loaded = results.filter(x=>x.status==='fulfilled').length;
+  const failures = results.filter(x=>x.status==='rejected').map(x=>x.reason?.message||'Error desconocido');
+  document.getElementById('dataSourceStatus').textContent = loaded===3
+    ? 'Diario, semanal y mensual sincronizados.'
+    : `Fuentes activas: ${loaded}/3. ${failures.join(' · ')}`;
+  if (loaded) {
+    buildFilterOptions(); buildAll();
+    setStatus(loaded===3?'ok':'error', loaded===3?'3 hojas actualizadas':`${loaded}/3 hojas cargadas`);
+    document.getElementById('lastUpdate').textContent = 'Última actualización: ' + new Date().toLocaleString('es-MX') + ' · Auto cada 1 min';
+  } else {
+    setStatus('error','Error al cargar');
+    document.getElementById('lastUpdate').textContent = 'No se pudo cargar ninguna fuente de datos.';
+  }
+}
+
+function normalizePercent(value) {
+  const raw = String(value ?? '').replace(/^"|"$/g,'').trim();
+  if (!raw) return null;
+  const n = parseFloat(raw.replace('%','').replace('$','').replace(/\s/g,'').replace(',','.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+function parsePeriodCSV(text, period) {
+  const rows = parseCSVRows(text);
+  if (rows.length < 2) return {};
+  const headerRow = period === 'semanal' ? (rows[1] || []) : rows[0];
+  const startRow = period === 'semanal' ? 2 : 1;
+  const dates = headerRow.slice(4).map(x=>String(x||'').trim());
+  const parsed = {};
+  for (let i=startRow;i<rows.length;i++) {
+    const row=rows[i];
+    const line=String(row[0]||'').trim().toUpperCase();
+    const content=String(row[3]||'').trim().toLowerCase();
+    if (!/^(L([1-9]|1[0-3])|ALL)$/.test(line) || (!content.includes('ng') && !content.includes('mis'))) continue;
+    parsed[line]={ target:normalizePercent(row[2])||0, data:row.slice(4,4+dates.length).map(normalizePercent), dates };
+  }
+  return parsed;
+}
+
+function setStatus(type, text) {
+  const b = document.getElementById('statusBadge');
+  b.className = type === 'ok' ? '' : type;
+  b.innerHTML = type === 'loading' ? `<span class="spinner"></span>${text}` : text;
+}
+
+// ── Parser CSV ─────────────────────────────────────────────────
+function parseCSV(text) {
+  const rows = text.trim().split('\n').map(r => {
+    const cols = []; let cur = ''; let inQ = false;
+    for (const ch of r) {
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    cols.push(cur.trim());
+    return cols;
+  });
+  if (rows.length < 2) { setStatus('error','CSV vacío'); return; }
+
+  const header = rows[0];
+  const dates = header.slice(4).map(d => d.replace(/^"|"$/g,'').trim());
+  DATA = {};
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row[0]) continue;
+    const line = row[0].replace(/^"|"$/g,'').trim();
+    const targetRaw = (row[2]||'').replace(/^"|"$/g,'').trim();
+    const content = (row[3]||'').replace(/^"|"$/g,'').trim();
+    if (!content.toLowerCase().includes('ng') && !content.toLowerCase().includes('mis')) continue;
+
+    const target = parseFloat(targetRaw.replace('%','')) || 0;
+    const values = row.slice(4).map(v => {
+      const raw = (v||'').replace(/^"|"$/g,'').trim();
+      if (raw === '') return null; // Celda vacía = sin dato; 0.0000 sí es un dato válido.
+      const n = parseFloat(raw.replace('%','').replace('$','').replace(',','.'));
+      return Number.isFinite(n) ? n : null;
+    });
+    if (!DATA[line]) DATA[line] = { target, data: values, dates };
+  }
+
+  if (Object.keys(DATA).length === 0) {
+    setStatus('error','No se encontraron filas. Revisa el formato del CSV.');
+    return;
+  }
+  buildFilterOptions();
+  buildAll();
+}
+
+// ── Opciones de filtro mes/semana ──────────────────────────────
+const MONTH_NAMES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+function parseDateHeader(d) {
+  const raw = String(d || '').replace(/^"|"$/g,'').trim();
+  if (!raw) return null;
+
+  // Formato principal esperado: día/mes/año. Ejemplo: 24/06/2026
+  let parts = raw.split('/').map(x => x.trim());
+  if (parts.length >= 3) {
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    let year = parseInt(parts[2], 10);
+    if (year < 100) year += 2000;
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 2000 && year <= 2100) {
+      return { day, month, year, raw };
+    }
+  }
+
+  // Respaldo por si Google Sheets entrega yyyy-mm-dd
+  parts = raw.split('-').map(x => x.trim());
+  if (parts.length >= 3) {
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 2000 && year <= 2100) {
+      return { day, month, year, raw };
+    }
+  }
+  return null;
+}
+
+function getMonthKey(d) {
+  const parsed = parseDateHeader(d);
+  if (!parsed) return '';
+  return String(parsed.month).padStart(2,'0') + '/' + parsed.year;
+}
+
+function monthKey(month, year) {
+  return String(month).padStart(2,'0') + '/' + year;
+}
+
+function buildFilterOptions() {
+  const monthData=DATA_BY_PERIOD.mensual;
+  const weekData=DATA_BY_PERIOD.semanal;
+  const firstMonth=Object.values(monthData)[0];
+  const firstWeek=Object.values(weekData)[0];
+  window._months=(firstMonth?.dates||[]).map((label,index)=>({
+    key:String(index), label,
+    hasData:Object.values(monthData).some(x=>Number.isFinite(x.data[index])&&x.data[index]!==0)
+  })).filter(x=>x.label);
+  window._weeks=(firstWeek?.dates||[]).map((label,index)=>({
+    label,index,hasData:Object.values(weekData).some(x=>Number.isFinite(x.data[index]))
+  })).filter(x=>x.label);
+  const dailyDates=Object.values(DATA_BY_PERIOD.general)[0]?.dates||[];
+  const isoDates=dailyDates.map(dateHeaderToIso).filter(Boolean).sort();
+  const dateInput=document.getElementById('dailyDateInput');
+  if(dateInput&&isoDates.length){dateInput.min=isoDates[0];dateInput.max=isoDates[isoDates.length-1];}
+}
+
+function dateHeaderToIso(raw) {
+  const parsed=parseDateHeader(raw);
+  return parsed?`${parsed.year}-${String(parsed.month).padStart(2,'0')}-${String(parsed.day).padStart(2,'0')}`:'';
+}
+
+function updateFilterSelect() {
+  const box = document.getElementById('filterSelect');
+  const panel = document.getElementById('multiFilterPanel');
+  const dailyBox=document.getElementById('dailyDateFilter');
+  if(dailyBox) dailyBox.style.display=currentPeriod==='general'?'flex':'none';
+  if (currentPeriod === 'general') { box.style.display='none'; return; }
+  const items = currentPeriod==='mensual'
+    ? (window._months||[]).map(x=>({value:x.key,label:x.label,hasData:x.hasData}))
+    : (window._weeks||[]).map((x,i)=>({value:String(x.index),label:`Semana ${i+1}: ${x.label}`,hasData:x.hasData}));
+  const available = items.filter(x=>x.hasData).map(x=>String(x.value));
+  const selection = PERIOD_SELECTIONS[currentPeriod];
+  if (!selection.size) available.forEach(x=>selection.add(x));
+  [...selection].forEach(x=>{if(!items.some(i=>String(i.value)===x))selection.delete(x)});
+  panel.innerHTML = `
+    <label class="multi-filter-option multi-filter-all"><input type="checkbox" data-all="1" ${available.every(x=>selection.has(x))?'checked':''}> Show all available</label>
+    ${items.map(item=>`<label class="multi-filter-option"><input type="checkbox" value="${item.value}" ${selection.has(String(item.value))?'checked':''} ${item.hasData?'':'disabled'}> ${item.label}${item.hasData?'':' — no data'}</label>`).join('')}`;
+  panel.querySelector('[data-all]')?.addEventListener('change',e=>{
+    selection.clear(); if(e.target.checked) available.forEach(x=>selection.add(x));
+    updateFilterSelect(); onFilterChange();
+  });
+  panel.querySelectorAll('input[value]').forEach(input=>input.addEventListener('change',()=>{
+    input.checked?selection.add(input.value):selection.delete(input.value);
+    updateMultiFilterLabel(items); onFilterChange();
+  }));
+  box.style.display='block';
+  updateMultiFilterLabel(items);
+}
+
+function updateMultiFilterLabel(items) {
+  const selection=PERIOD_SELECTIONS[currentPeriod];
+  const selected=items.filter(x=>selection.has(String(x.value)));
+  const label=document.getElementById('multiFilterLabel');
+  if(!selected.length) label.textContent='Select periods';
+  else if(selected.length===1) label.textContent=selected[0].label;
+  else label.textContent=`${selected.length} periods selected`;
+  const all=document.querySelector('#multiFilterPanel [data-all]');
+  if(all) all.checked=items.filter(x=>x.hasData).every(x=>selection.has(String(x.value)));
+}
+
+function toggleMultiFilter(event) {
+  event.stopPropagation();
+  document.getElementById('filterSelect').classList.toggle('open');
+}
+
+document.addEventListener('click',e=>{
+  const box=document.getElementById('filterSelect');
+  if(box&&!box.contains(e.target)) box.classList.remove('open');
+});
+
+function formatMonth(m) {
+  const parts = String(m).split('/'); // mes/año
+  if (parts.length >= 2) {
+    const mes = parseInt(parts[0], 10);
+    return (MONTH_NAMES[mes-1] || parts[0]) + ' ' + parts[1];
+  }
+  return m;
+}
+
+function getPeriodTitle() {
+  if (currentPeriod === 'general') return currentDailyDate?`Day ${currentDailyDate}`:'Daily';
+  const count=PERIOD_SELECTIONS[currentPeriod]?.size||0;
+  if (currentPeriod === 'mensual') return count===1?'1 month':`${count} months`;
+  if (currentPeriod === 'semanal') return count===1?'1 week':`${count} weeks`;
+  return '';
+}
+
+// ── Datos filtrados según periodo ──────────────────────────────
+function getFilteredData(line) {
+  const { data, dates } = DATA[line];
+  if (currentPeriod === 'general') {
+    if(!currentDailyDate)return {data,dates};
+    const indices=dates.reduce((acc,date,index)=>{if(dateHeaderToIso(date)===currentDailyDate)acc.push(index);return acc;},[]);
+    return {data:indices.map(i=>data[i]),dates:indices.map(i=>dates[i])};
+  }
+  const selected=PERIOD_SELECTIONS[currentPeriod]||new Set();
+  const indices=[...selected].map(Number).filter(Number.isInteger).sort((a,b)=>a-b);
+  return {data:indices.map(i=>data[i]),dates:indices.map(i=>dates[i])};
+}
+
+function onFilterChange() {
+  buildKPI();
+  buildCurrentView();
+}
+
+function onDailyDateChange() {
+  currentDailyDate=document.getElementById('dailyDateInput').value;
+  onFilterChange();
+}
+
+function clearDailyDate() {
+  currentDailyDate='';
+  document.getElementById('dailyDateInput').value='';
+  onFilterChange();
+}
+
+// ── Controles ──────────────────────────────────────────────────
+function setView(v, btn) {
+  currentView = v;
+  document.querySelectorAll('.pill').forEach(p => {
+    if(['Trend','By Line','Heatmap'].includes(p.textContent)) p.classList.remove('active');
+  });
+  if(btn) btn.classList.add('active');
+  document.getElementById('trendView').style.display  = v==='trend'?'block':'none';
+  document.getElementById('barsView').style.display   = v==='bars'?'block':'none';
+  document.getElementById('heatView').style.display   = v==='heat'?'block':'none';
+  document.getElementById('legendBox').style.display  = v==='trend'?'flex':'none';
+  buildCurrentView();
+}
+
+function setPeriod(p, btn) {
+  currentPeriod = p;
+  DATA = DATA_BY_PERIOD[p] || {};
+  ['btnGeneral','btnMensual','btnSemanal'].forEach(id => document.getElementById(id).classList.remove('active'));
+  btn.classList.add('active');
+  updateFilterSelect();
+  buildKPI();
+  buildCurrentView();
+}
+
+function buildCurrentView() {
+  if (currentView==='trend') buildTrend();
+  else if (currentView==='bars') buildBars();
+  else buildHeat();
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function lines() { return Object.keys(DATA); }
+function validValues(arr) { return arr.filter(Number.isFinite); }
+function avg(arr) { const v=validValues(arr); return v.length?v.reduce((a,b)=>a+b,0)/v.length:0; }
+
+function positiveValues(arr) { return arr.filter(x=>Number.isFinite(x)&&x>0); }
+function stdDev(arr) {
+  const v=positiveValues(arr); if(v.length<2)return Infinity;
+  const mean=avg(v); return Math.sqrt(v.reduce((sum,x)=>sum+(x-mean)**2,0)/v.length);
+}
+function insightHtml(icon,label,value,detail) {
+  return `<div class="insight"><div class="insight-top"><span class="insight-icon">${icon}</span>${label}</div><div class="insight-value">${value}</div><div class="insight-detail">${detail}</div></div>`;
+}
+function buildInsights() {
+  const grid=document.getElementById('insightsGrid');
+  if(!grid)return;
+  const production=lines().filter(l=>l!=='ALL');
+  if(!production.length){grid.innerHTML='<div class="insight">Sin datos disponibles.</div>';return;}
+  const stats=production.map(line=>{
+    const fd=getFilteredData(line); const vals=positiveValues(fd.data);
+    return {line,fd,vals,mean:vals.length?avg(vals):Infinity,stability:stdDev(vals),target:DATA[line].target};
+  }).filter(x=>x.vals.length);
+  if(!stats.length){grid.innerHTML='<div class="insight">Sin registros positivos en este periodo.</div>';return;}
+
+  const bestLine=[...stats].sort((a,b)=>a.mean-b.mean)[0];
+  const stable=[...stats].filter(x=>Number.isFinite(x.stability)).sort((a,b)=>a.stability-b.stability)[0]||bestLine;
+  const targetStar=[...stats].sort((a,b)=>(b.target-b.mean)-(a.target-a.mean))[0];
+  const improvements=stats.map(x=>({line:x.line,delta:x.vals[0]-x.vals[x.vals.length-1],from:x.vals[0],to:x.vals[x.vals.length-1]})).sort((a,b)=>b.delta-a.delta);
+  const improved=improvements[0];
+
+  const reference=getFilteredData(production[0]);
+  const officialPeriod=DATA.ALL?getFilteredData('ALL'):{dates:[],data:[]};
+  const dayStats=currentPeriod==='general'
+    ? reference.dates.map((date,index)=>{
+        const values=production.map(line=>getFilteredData(line).data[index]).filter(x=>Number.isFinite(x)&&x>0);
+        return {date,mean:values.length?avg(values):Infinity,count:values.length,official:false};
+      }).filter(x=>Number.isFinite(x.mean)&&x.count>=Math.min(5,production.length))
+    : officialPeriod.dates.map((date,index)=>({date,mean:officialPeriod.data[index],count:1,official:true})).filter(x=>Number.isFinite(x.mean)&&x.mean>0);
+  const bestDay=[...dayStats].sort((a,b)=>a.mean-b.mean)[0];
+
+  const monthSource=DATA_BY_PERIOD.mensual;
+  const monthItems=window._months||[];
+  const monthIndices=currentPeriod==='mensual'
+    ? [...PERIOD_SELECTIONS.mensual].map(Number).filter(Number.isInteger)
+    : monthItems.filter(x=>x.hasData).map(x=>Number(x.key));
+  const monthStats=monthIndices.map(index=>{
+    const value=monthSource.ALL?.data[index];
+    return {label:monthItems.find(x=>Number(x.key)===index)?.label||monthSource.ALL?.dates[index]||'—',value};
+  }).filter(x=>Number.isFinite(x.value)&&x.value>0);
+  const bestMonth=[...monthStats].sort((a,b)=>a.value-b.value)[0];
+  const riskMonth=[...monthStats].sort((a,b)=>b.value-a.value)[0];
+
+  const allFd=DATA.ALL?getFilteredData('ALL'):{data:[],dates:[]};
+  const official=validValues(allFd.data);
+  const allMean=official.length?avg(official):null;
+  const periodLabel=currentPeriod==='general'?'daily records':currentPeriod==='mensual'?'selected months':'selected weeks';
+  const bestPeriodLabel=currentPeriod==='general'?'Best Day':currentPeriod==='mensual'?'Best Selected Month':'Best Selected Week';
+
+  grid.innerHTML=[
+    insightHtml('★','Best Line',bestLine.line,`${bestLine.mean.toFixed(2)}% average · lower is better`),
+    insightHtml('☀',bestPeriodLabel,bestDay?.date||'—',bestDay?(bestDay.official?`${bestDay.mean.toFixed(2)}% · official ALL value`:`${bestDay.mean.toFixed(2)}% operational · ${bestDay.count} lines`):'Insufficient coverage'),
+    insightHtml('◒','Best Month',bestMonth?.label||'—',bestMonth?`${bestMonth.value.toFixed(2)}% · official ALL monthly value`:'No official ALL monthly data'),
+    insightHtml('▲','Highest-Risk Month',riskMonth?.label||'—',riskMonth?`${riskMonth.value.toFixed(2)}% · official ALL monthly value`:'No official ALL monthly data'),
+    insightHtml('↘','Biggest Improvement',improved.delta>0?improved.line:'No improvement',improved.delta>0?`Down ${improved.delta.toFixed(2)} pts · ${improved.from.toFixed(1)}% → ${improved.to.toFixed(1)}%`:'No line closed below its starting point'),
+    insightHtml('≈','Most Stable',stable.line,`Deviation ${stable.stability.toFixed(2)} · ${stable.vals.length} records`),
+    insightHtml('✓','Best vs Target',targetStar.line,`${(targetStar.target-targetStar.mean).toFixed(2)} pts margin · target ${targetStar.target}%`),
+    insightHtml('◆','Official ALL',allMean===null?'—':allMean.toFixed(2)+'%',`${official.length} ${periodLabel} · official source value`)
+  ].join('');
+}
+
+function buildAll() {
+  updateFilterSelect();
+  buildKPI();
+  buildLegend();
+  buildCurrentView();
+}
+
+function buildKPI() {
+  const ls = lines();
+  const productionLines = ls.filter(l=>l!=='ALL');
+  let over=0,under=0,sum=0,count=0,worstLine='—',worstVal=0;
+  productionLines.forEach(l => {
+    const fd = getFilteredData(l);
+    const a = avg(fd.data);
+    if (validValues(fd.data).length === 0) return;
+    sum += a; count++;
+    if(a>DATA[l].target) over++; else under++;
+    if(a>worstVal){worstVal=a;worstLine=l;}
+  });
+  const allValues = DATA.ALL ? validValues(getFilteredData('ALL').data) : [];
+  const overall = allValues.length ? avg(allValues).toFixed(2) : (count?(sum/count).toFixed(2):'—');
+  const periodo = getPeriodTitle();
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi"><div class="kpi-label">ALL · ${periodo}</div><div class="kpi-val">${overall}${overall==='—'?'':'%'}</div></div>
+    <div class="kpi"><div class="kpi-label">Lines Below Target</div><div class="kpi-val ok">${under}</div><div class="kpi-sub">${count} lines with data</div></div>
+    <div class="kpi"><div class="kpi-label">Lines Above Target</div><div class="kpi-val bad">${over}</div><div class="kpi-sub">require attention</div></div>
+    <div class="kpi"><div class="kpi-label">Most Critical Line</div><div class="kpi-val bad">${worstLine}</div><div class="kpi-sub">${count ? 'Avg '+worstVal.toFixed(1)+'%' : 'No data'}</div></div>`;
+  buildInsights();
+}
+
+function buildLegend() {
+  document.getElementById('legendBox').innerHTML = lines().map((l,i)=>
+    `<div class="legend-item ${hiddenLines.has(l)?'hidden':''}" onclick="toggleLine('${l}')">
+      <span class="legend-dot" style="background:${l==='ALL'?'#6d5dfc':COLORS[i%COLORS.length]}"></span><span class="${l==='ALL'?'all-highlight':''}">${l}</span></div>`
+  ).join('');
+}
+
+function toggleLine(l) {
+  if(hiddenLines.has(l)) hiddenLines.delete(l); else hiddenLines.add(l);
+  buildLegend();
+  if(currentView==='trend') buildTrend();
+}
+
+// ── Tendencia ──────────────────────────────────────────────────
+function buildTrend() {
+  const ls = lines();
+  if (!ls.length) return;
+  const firstFiltered = getFilteredData(ls[0]);
+  const labels = firstFiltered.dates;
+  if (!labels.length) {
+    if(chartInst){chartInst.destroy();chartInst=null;}
+    document.getElementById('trendView').innerHTML = '<div class="chart-wrap"><canvas id="mainChart" role="img" aria-label="Tasa Misjusdments por línea"></canvas></div><div style="font-size:13px;color:var(--muted);margin-top:8px;">Sin datos para '+getPeriodTitle()+'.</div>';
+    return;
+  } else if (!document.getElementById('mainChart')) {
+    document.getElementById('trendView').innerHTML = '<div class="chart-wrap"><canvas id="mainChart" role="img" aria-label="Tasa Misjusdments por línea"></canvas></div>';
+  }
+
+  const datasets = ls.map((l,i) => {
+    const fd = getFilteredData(l);
+    const seriesColor = l==='ALL' ? '#6d5dfc' : COLORS[i%COLORS.length];
+    return {
+      label: l, data: fd.data,
+      borderColor: seriesColor,
+      backgroundColor: seriesColor+'22',
+      borderWidth: l==='ALL'?3:1.5, pointRadius: currentPeriod!=='general'?(l==='ALL'?5:3):0,
+      borderDash: l==='ALL'?[]:undefined,
+      tension: 0.3, hidden: hiddenLines.has(l)
+    };
+  });
+
+  if(chartInst){chartInst.destroy();chartInst=null;}
+  chartInst = new Chart(document.getElementById('mainChart'),{
+    type:'line', data:{labels,datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{mode:'index',intersect:false,
+          callbacks:{label:ctx=>` ${ctx.dataset.label}: ${Number.isFinite(ctx.parsed.y)?ctx.parsed.y.toFixed(1)+'%':'Sin dato'}`}
+        },
+        title:{
+          display: currentPeriod!=='general',
+          text: getPeriodTitle(),
+          color:'#52514e', font:{size:13,weight:'500'}
+        }
+      },
+      scales:{
+        x:{ticks:{autoSkip:true,maxTicksLimit:14,font:{size:11},color:'#898781',maxRotation:45},grid:{color:'#e8e7e3'}},
+        y:{min:0,max:105,ticks:{callback:v=>v+'%',font:{size:11},color:'#898781'},grid:{color:'#e8e7e3'}}
+      }
+    }
+  });
+}
+
+// ── Por línea ──────────────────────────────────────────────────
+function buildBars() {
+  const hasAnyData = lines().some(l => validValues(getFilteredData(l).data).length > 0);
+  if (!hasAnyData) {
+    document.getElementById('barsView').innerHTML = '<div style="font-size:13px;color:var(--muted);">Sin datos para '+getPeriodTitle()+'.</div>';
+    return;
+  }
+  document.getElementById('barsView').innerHTML =
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Línea vertical = target. Promedio del periodo seleccionado.</div>' +
+    lines().map((l,i)=>{
+      const fd = getFilteredData(l);
+      const a = avg(fd.data);
+      const t = DATA[l].target;
+      const color = a>t?'#e34948':'#1baf7a';
+      return `<div class="bar-row">
+        <div class="bar-label ${l==='ALL'?'all-highlight':''}" style="color:${l==='ALL'?'#6d5dfc':COLORS[i%COLORS.length]}">${l}</div>
+        <div class="bar-outer">
+          <div class="bar-inner" style="width:${Math.min(a,100)}%;background:${color}">${a>8?a.toFixed(2)+'%':''}</div>
+          <div class="target-line" style="left:${Math.min(t,100)}%"></div>
+        </div>
+        <div class="bar-pct" style="color:${color}">${a.toFixed(2)}%</div>
+        <div class="bar-target">target ${t}%</div>
+      </div>`;
+    }).join('');
+}
+
+// ── Mapa de calor ──────────────────────────────────────────────
+function buildHeat() {
+  const ls = lines();
+  const heatBox = document.getElementById('heatView');
+  if(!ls.length) return;
+
+  let columns = [];
+  let titleNote = '';
+
+  if (currentPeriod === 'general') {
+    const fd=getFilteredData(ls[0]);
+    columns=fd.dates.map((date,index)=>({label:date,localIndex:index}));
+    titleNote=currentDailyDate?'Daily heatmap for the selected date.':'Daily heatmap · scroll horizontally to explore all dates.';
+  } else {
+    const fd = getFilteredData(ls[0]);
+    columns = fd.dates.map((d,idx) => ({ label: d, localIndex: idx }));
+    titleNote = currentPeriod === 'mensual'
+      ? 'Mapa de calor de los meses seleccionados.'
+      : 'Mapa de calor de las semanas seleccionadas.';
+  }
+
+  if (!columns.length) {
+    heatBox.innerHTML = `<div style="font-size:13px;color:var(--muted);">Sin datos para ${getPeriodTitle()}.</div>`;
+    return;
+  }
+
+  function heatColor(v) {
+    if(v===0) return{bg:'#f5f5f3',text:'#898781'};
+    if(v<10)  return{bg:'#d1fae5',text:'#065f46'};
+    if(v<25)  return{bg:'#86efac',text:'#14532d'};
+    if(v<50)  return{bg:'#fde68a',text:'#78350f'};
+    if(v<75)  return{bg:'#fca5a5',text:'#7f1d1d'};
+    return{bg:'#ef4444',text:'#ffffff'};
+  }
+
+  const thead = `<tr><th style="text-align:left">Línea</th>${columns.map(c=>`<th>${c.label}</th>`).join('')}</tr>`;
+  const tbody = ls.map((l,i)=>{
+    const fd = getFilteredData(l);
+    const cells = columns.map(c=>{
+      let vals = [];
+      const rawValue = fd.data[c.localIndex];
+      vals = Number.isFinite(rawValue) && rawValue>0 ? [rawValue] : [];
+      const displayValue = vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
+      const color = heatColor(displayValue);
+      return `<td style="background:${color.bg};color:${color.text};border-radius:4px">${displayValue>0?displayValue.toFixed(0)+'%':'—'}</td>`;
+    }).join('');
+    return `<tr><td class="line-name ${l==='ALL'?'all-highlight':''}" style="color:${COLORS[i%COLORS.length]}">${l}</td>${cells}</tr>`;
+  }).join('');
+
+  heatBox.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">${titleNote}</div>
+    <div class="heat-scroll"><table class="heat-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+    <div class="heat-legend">
+      <span>Escala:</span>
+      <span class="heat-swatch" style="background:#d1fae5;color:#065f46">&lt;10%</span>
+      <span class="heat-swatch" style="background:#86efac;color:#14532d">10–25%</span>
+      <span class="heat-swatch" style="background:#fde68a;color:#78350f">25–50%</span>
+      <span class="heat-swatch" style="background:#fca5a5;color:#7f1d1d">50–75%</span>
+      <span class="heat-swatch" style="background:#ef4444;color:#fff">&gt;75%</span>
+    </div>`;
+}
+
+// ── Base de modelos internos / externos ───────────────────────
+function parseCSVRows(text) {
+  return text.trim().split(/\r?\n/).map(row => {
+    const cols = []; let cur = ''; let inQ = false;
+    for (let i=0; i<row.length; i++) {
+      const ch = row[i];
+      if (ch === '"' && row[i+1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    cols.push(cur.trim());
+    return cols.map(c => c.replace(/^"|"$/g,'').trim());
+  });
+}
+
+function findModelColumns(header) {
+  const norm = s => String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  const h = header.map(norm);
+
+  // La base viene así:
+  // A = No., B = Internal Model Name, C = Model Name, D = Module
+  let internal = h.findIndex(x =>
+    x.includes('internal model') ||
+    x.includes('internal') ||
+    x.includes('modelo interno') ||
+    x.includes('interno')
+  );
+
+  let external = h.findIndex((x, idx) =>
+    idx !== internal && (
+      x === 'model name' ||
+      x === 'model' ||
+      x.includes('external model') ||
+      x.includes('external') ||
+      x.includes('modelo externo') ||
+      x.includes('externo')
+    )
+  );
+
+  // Fallback específico para tu hoja: B = interno, C = externo.
+  if (internal < 0 && header.length > 1) internal = 1;
+  if (external < 0 && header.length > 2) external = 2;
+
+  // Nunca tomar columna No. como modelo externo.
+  if (external === 0 && header.length > 2) external = 2;
+
+  return { internal, external };
+}
+
+async function loadModelDB() {
+  const status = document.getElementById('modelDbStatus');
+  for (const proxyFn of PROXIES) {
+    try {
+      const sep = proxyFn === PROXIES[0] ? (MODEL_DB_URL.includes('?') ? '&' : '?') + 't=' + Date.now() : '';
+      const res = await fetch(proxyFn(MODEL_DB_URL + sep), { cache:'no-store', signal: AbortSignal.timeout(10000) });
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (!text || text.trim().length < 5) continue;
+      const rows = parseCSVRows(text);
+      const header = rows[0] || [];
+      const cols = findModelColumns(header);
+      MODEL_DB = rows.slice(1).map(r => ({
+        internal: (r[cols.internal] || '').trim(),
+        external: (r[cols.external] || '').trim()
+      })).filter(x => x.internal && x.external);
+      refreshInternalDatalist('');
+      filterModelOptions();
+      if (status) status.textContent = MODEL_DB.length ? `Base cargada: ${MODEL_DB.length} modelos` : 'No se encontraron modelos';
+      return;
+    } catch(e) { continue; }
+  }
+  if (status) status.textContent = 'No se pudo cargar la base de modelos';
+}
+
+function refreshInternalDatalist(query) {
+  const list = document.getElementById('modelosInternosList');
+  if (!list) return;
+  const q = (query || '').toUpperCase();
+  const unique = [...new Set(MODEL_DB.map(x => x.internal))]
+    .filter(v => !q || v.toUpperCase().includes(q))
+    .slice(0, 80);
+  list.innerHTML = unique.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
+}
+
+function filterModelOptions() {
+  const input = document.getElementById('modeloInterno');
+  const select = document.getElementById('modeloExterno');
+  if (!input || !select) return;
+  const q = input.value.trim().toUpperCase();
+  refreshInternalDatalist(q);
+
+  let matches = MODEL_DB;
+  if (q) {
+    const exact = MODEL_DB.filter(x => x.internal.toUpperCase() === q);
+    matches = exact.length ? exact : MODEL_DB.filter(x => x.internal.toUpperCase().includes(q));
+  } else {
+    matches = [];
+  }
+  const externals = [...new Set(matches.map(x => x.external).filter(Boolean))];
+  select.innerHTML = '<option value="">' + (q ? 'Selecciona modelo externo' : 'Primero escribe modelo interno') + '</option>' +
+    externals.map(v => `<option>${escapeHtml(v)}</option>`).join('');
+  if (externals.length === 1) select.value = externals[0];
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+}
+
+// ── Ajustes múltiples ─────────────────────────────────────────
+function addAdjustmentRow(data={}) {
+  const box = document.getElementById('ajustesBox');
+  if (!box) return;
+  ajusteCount += 1;
+  const id = ajusteCount;
+  const row = document.createElement('div');
+  row.className = 'adjustment-row';
+  row.dataset.adjustmentId = id;
+  row.innerHTML = `
+    <div><label>Ajuste realizado</label><select class="ajusteTipo">
+      <option value="">Selecciona ajuste</option>
+      <option>Rango inferior</option>
+      <option>Rango superior</option>
+      <option>Gap / máxima desviación</option>
+      <option>Cambio de parámetro de detección</option>
+      <option>Corrección de posición / ROI</option>
+      <option>Otro</option>
+    </select></div>
+    <div><label>Valor anterior</label><input class="ajusteAnterior" placeholder="Valor anterior"></div>
+    <div><label>Valor nuevo</label><input class="ajusteNuevo" placeholder="Valor nuevo"></div>
+    <button type="button" class="danger-btn" onclick="removeAdjustmentRow(this)">Eliminar</button>`;
+  box.appendChild(row);
+  if (data.tipo) row.querySelector('.ajusteTipo').value = data.tipo;
+  if (data.anterior) row.querySelector('.ajusteAnterior').value = data.anterior;
+  if (data.nuevo) row.querySelector('.ajusteNuevo').value = data.nuevo;
+}
+
+function removeAdjustmentRow(btn) {
+  const box = document.getElementById('ajustesBox');
+  const row = btn.closest('.adjustment-row');
+  if (row) row.remove();
+  if (box && box.children.length === 0) addAdjustmentRow();
+}
+
+function resetAdjustments() {
+  const box = document.getElementById('ajustesBox');
+  if (!box) return;
+  box.innerHTML = '';
+  ajusteCount = 0;
+  addAdjustmentRow({tipo:'Rango inferior'});
+  addAdjustmentRow({tipo:'Rango superior'});
+  addAdjustmentRow({tipo:'Gap / máxima desviación'});
+}
+
+
+// ── Navegación Dashboard / Reportes ────────────────────────────
+function showPage(pageId, btn) {
+  document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+  document.getElementById(pageId).classList.add('active');
+  document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (pageId === 'dashboardPage') buildCurrentView();
+}
+
+function openWorkspaceSection(pageId, reportId, btn) {
+  document.querySelectorAll('.workspace-nav').forEach(item=>item.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  showPage(pageId,null);
+  if(reportId)showReport(reportId,null);
+  toggleWorkspaceMenu(false);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function toggleReportSubmenu(event,button) {
+  event.stopPropagation();
+  const submenu=document.getElementById('reportCenterSubmenu');
+  const open=!submenu.classList.contains('open');
+  submenu.classList.toggle('open',open);
+  button.classList.toggle('open',open);
+  button.setAttribute('aria-expanded',String(open));
+}
+
+function openReportCenterType(type,btn) {
+  openWorkspaceSection('reportesPage','downloadsReport',btn);
+  const select=document.getElementById('visualReportType');
+  if(select)select.value=type;
+  const configs={
+    misjudgments:{
+      title:'Misjudgment Performance Report',
+      description:'Official ALL result with monthly summary, weekly breakdown, daily trend and detailed line performance.',
+      pdf:'Generate Performance PDF',csv:'Export Misjudgments CSV'
+    },
+    checklist:{
+      title:'Shift Checklist Report',
+      description:'Shift compliance, status by production line, responsible owner, comments and photographic evidence records.',
+      pdf:'Generate Checklist PDF',csv:'Export Checklist CSV'
+    },
+    cambios:{
+      title:'AOI Change Activity Report',
+      description:'Parameter changes, template adjustments, affected lines, owners, before/after values and evidence.',
+      pdf:'Generate Changes PDF',csv:'Export Changes CSV'
+    },
+    templates:{
+      title:'Template Validation Report',
+      description:'Template readiness, required objects, destination coverage, validation status and supporting evidence.',
+      pdf:'Generate Templates PDF',csv:'Export Templates CSV'
+    }
+  };
+  const config=configs[type]||configs.misjudgments;
+  document.getElementById('reportCenterTitle').textContent=config.title;
+  document.getElementById('reportCenterDescription').textContent=config.description;
+  document.getElementById('visualReportTypeField').style.display='none';
+  document.getElementById('visualPdfButton').textContent=config.pdf;
+  document.getElementById('visualCsvButton').textContent=config.csv;
+  const period=document.getElementById('visualReportPeriod');
+  if(period)period.value='month';
+  toggleVisualReportInputs();
+  updateVisualReportPreview();
+}
+
+function toggleWorkspaceMenu(open) {
+  const sidebar=document.querySelector('.workspace-sidebar');
+  const overlay=document.getElementById('workspaceOverlay');
+  if(!sidebar||!overlay)return;
+  sidebar.classList.toggle('open',open);
+  overlay.classList.toggle('open',open);
+  document.body.style.overflow=open?'hidden':'';
+}
+
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape')toggleWorkspaceMenu(false);
+});
+
+function showReport(reportId, btn) {
+  document.querySelectorAll('.report-section').forEach(s => s.classList.remove('active'));
+  document.getElementById(reportId).classList.add('active');
+  document.querySelectorAll('.report-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (reportId === 'downloadsReport') buildDownloadReportsGrid();
+}
+
+function getReportSheetUrl(reportKey) {
+  const report = REPORT_DOWNLOADS[reportKey];
+  if (!report || !report.sheetId) return '';
+  return `https://docs.google.com/spreadsheets/d/${report.sheetId}/edit?usp=sharing`;
+}
+
+function getReportsExportUrl(reportKey, format) {
+  const report = REPORT_DOWNLOADS[reportKey];
+  if (!report || !report.sheetId) return '';
+  if (format === 'xlsx') {
+    return `https://docs.google.com/spreadsheets/d/${report.sheetId}/export?format=xlsx`;
+  }
+  if (format === 'pdf') {
+    const params = new URLSearchParams({
+      format: 'pdf',
+      size: 'A4',
+      portrait: 'false',
+      fitw: 'true',
+      sheetnames: 'false',
+      printtitle: 'false',
+      pagenumbers: 'false',
+      gridlines: 'false',
+      fzr: 'false'
+    });
+    return `https://docs.google.com/spreadsheets/d/${report.sheetId}/export?${params.toString()}`;
+  }
+  return getReportSheetUrl(reportKey);
+}
+
+function downloadReports(reportKey, format) {
+  const url = getReportsExportUrl(reportKey, format);
+  if (!url) {
+    alert('Falta configurar el link de este reporte en REPORT_DOWNLOADS.');
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+function requestSheetPassword() {
+  const password = prompt('Ingresa la contraseña para abrir la hoja de cálculo:');
+  if (password === null) return false;
+  if (password === SHEET_ACCESS_PASSWORD) return true;
+  alert('Contraseña incorrecta.');
+  return false;
+}
+
+function openProtectedSheet(reportKey) {
+  const url = getReportSheetUrl(reportKey);
+  if (!url) {
+    alert('Falta configurar el link de este reporte en REPORT_DOWNLOADS.');
+    return;
+  }
+  if (!requestSheetPassword()) return;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+function openReportsSheet(reportKey) {
+  openProtectedSheet(reportKey);
+}
+
+function requestDataSourcePassword() {
+  const password = prompt('Ingresa la contrasena para desbloquear la fuente de datos:');
+  if (password === null) return false;
+  if (password === SHEET_ACCESS_PASSWORD) return true;
+  alert('Contrasena incorrecta.');
+  return false;
+}
+
+function unlockDataSource() {
+  if (!requestDataSourcePassword()) return;
+  dataSourceUnlocked = true;
+  const input = document.getElementById('csvUrl');
+  const button = document.getElementById('loadDataSourceBtn');
+  const status = document.getElementById('dataSourceStatus');
+  if (input) input.disabled = false;
+  if (button) button.disabled = false;
+  if (status) status.textContent = 'Fuente desbloqueada.';
+}
+
+function loadProtectedDataSource() {
+  if (!dataSourceUnlocked && !requestDataSourcePassword()) return;
+  dataSourceUnlocked = true;
+  const input = document.getElementById('csvUrl');
+  const button = document.getElementById('loadDataSourceBtn');
+  const status = document.getElementById('dataSourceStatus');
+  if (input) input.disabled = false;
+  if (button) button.disabled = false;
+  if (status) status.textContent = 'Fuente desbloqueada.';
+  loadData();
+}
+
+function moveDataSourceToBottom() {
+  const card = document.getElementById('dataSourceCard');
+  const dashboard = document.getElementById('dashboardPage');
+  const footer = dashboard?.querySelector('.sheet-footer');
+  if (card && dashboard && footer) dashboard.insertBefore(card, footer);
+}
+
+function buildDownloadReportsGrid() {
+  const grid = document.getElementById('downloadReportsGrid');
+  if (!grid) return;
+  grid.innerHTML = Object.entries(REPORT_DOWNLOADS).map(([key, report]) => {
+    const ready = !!report.sheetId;
+    const status = ready ? 'Listo' : 'Falta link';
+    const statusClass = ready ? 'download-status' : 'download-status pending';
+    return `<div class="download-card">
+      <div class="download-title">${escapeHtml(report.label)}</div>
+      <div class="${statusClass}">${status}</div>
+      <div class="download-text">${escapeHtml(report.description)}</div>
+      <div class="download-actions">
+        <button class="primary-btn" type="button" onclick="downloadReports('${key}','xlsx')">Excel</button>
+        <button class="primary-btn" type="button" onclick="downloadReports('${key}','pdf')">PDF</button>
+        <button class="secondary-btn" type="button" onclick="openReportsSheet('${key}')">Abrir hoja</button>
+      </div>
+    </div>`;
+  }).join('');
+  initVisualReportControls();
+}
+
+function initVisualReportControls() {
+  const today = new Date();
+  const iso = dateToInputValue(today);
+  const date = document.getElementById('visualReportDate');
+  const start = document.getElementById('visualReportStart');
+  const end = document.getElementById('visualReportEnd');
+  const month = document.getElementById('visualReportMonth');
+  if (date && !date.value) date.value = iso;
+  if (start && !start.value) start.value = iso;
+  if (end && !end.value) end.value = iso;
+  if (month && !month.value) month.value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  toggleVisualReportInputs();
+  updateVisualReportPreview();
+}
+
+function dateToInputValue(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+
+function parsedHeaderToDate(raw) {
+  const parsed = parseDateHeader(raw);
+  if (!parsed) return null;
+  return new Date(parsed.year, parsed.month - 1, parsed.day);
+}
+
+function getWeekBounds(date) {
+  const start = new Date(date);
+  const day = start.getDay() || 7;
+  start.setDate(start.getDate() - day + 1);
+  start.setHours(0,0,0,0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23,59,59,999);
+  return { start, end };
+}
+
+function toggleVisualReportInputs() {
+  const period = document.getElementById('visualReportPeriod')?.value || 'day';
+  document.querySelectorAll('.visual-date').forEach(el => el.style.display = (period === 'day' || period === 'week') ? '' : 'none');
+  document.querySelectorAll('.visual-month').forEach(el => el.style.display = period === 'month' ? '' : 'none');
+  document.querySelectorAll('.visual-range').forEach(el => el.style.display = period === 'range' ? '' : 'none');
+}
+
+function getVisualReportRange() {
+  const period = document.getElementById('visualReportPeriod')?.value || 'day';
+  if (period === 'month') {
+    const value = document.getElementById('visualReportMonth')?.value;
+    if (!value) return null;
+    const [year, month] = value.split('-').map(Number);
+    return {
+      title: `Mes ${String(month).padStart(2,'0')}/${year}`,
+      start: new Date(year, month - 1, 1),
+      end: new Date(year, month, 0, 23, 59, 59, 999)
+    };
+  }
+  if (period === 'range') {
+    const startValue = document.getElementById('visualReportStart')?.value;
+    const endValue = document.getElementById('visualReportEnd')?.value;
+    if (!startValue || !endValue) return null;
+    const start = new Date(startValue + 'T00:00:00');
+    const end = new Date(endValue + 'T23:59:59');
+    return { title: `Rango ${startValue} a ${endValue}`, start, end };
+  }
+  const value = document.getElementById('visualReportDate')?.value;
+  if (!value) return null;
+  const date = new Date(value + 'T00:00:00');
+  if (period === 'week') {
+    const bounds = getWeekBounds(date);
+    return { title: `Semana ${dateToInputValue(bounds.start)} a ${dateToInputValue(bounds.end)}`, ...bounds };
+  }
+  return { title: `Dia ${value}`, start: date, end: new Date(value + 'T23:59:59') };
+}
+
+function getVisualReportType() {
+  return document.getElementById('visualReportType')?.value || 'misjudgments';
+}
+
+function getVisualReportLabel(type=getVisualReportType()) {
+  const labels = {
+    misjudgments: 'Misjudgments',
+    checklist: 'Checklist',
+    cambios: 'Registro de cambios',
+    templates: 'Registro de templates'
+  };
+  return labels[type] || type;
+}
+
+function getVisualReportQueryRange() {
+  const range = getVisualReportRange();
+  if (!range) return null;
+  return {
+    ...range,
+    from: dateToInputValue(range.start),
+    to: dateToInputValue(range.end)
+  };
+}
+
+function getMisjudgmentVisualReport(range) {
+  const source=DATA_BY_PERIOD.general;
+  const sourceLines=Object.keys(source);
+  if (!range || !sourceLines.length) return { range, rows: [], dates: [], columns: [] };
+  const firstLine = sourceLines[0];
+  const reportDates = (source[firstLine]?.dates || []).map((raw, index) => ({ raw, index, date: parsedHeaderToDate(raw) }))
+    .filter(item => item.date && item.date >= range.start && item.date <= range.end);
+  const rows = sourceLines.map(line => {
+    const item = source[line];
+    const values = reportDates.map(d => item.data[d.index] || 0);
+    const active = values.filter(v => v > 0);
+    const avgValue = avg(values);
+    const maxValue = active.length ? Math.max(...active) : 0;
+    const overTarget = values.filter(v => item.target && v > item.target).length;
+    return {
+      Linea: line,
+      'Target %': item.target.toFixed(2),
+      'Dias con datos': active.length,
+      'Promedio %': avgValue.toFixed(2),
+      'Maximo %': maxValue.toFixed(2),
+      'Dias sobre target': overTarget
+    };
+  });
+  return {
+    range,
+    rows,
+    dates: reportDates,
+    columns: ['Linea','Target %','Dias con datos','Promedio %','Maximo %','Dias sobre target']
+  };
+}
+
+function visualColumnsForType(type, rows) {
+  const preferred = {
+    checklist: ['ID Reporte','Fecha','Hora','Turno','Momento','Responsable','Linea','Estado','Comentario','Link Foto'],
+    cambios: ['ID Reporte','Fecha','Hora','Turno','Responsable','Linea','Modelo Interno','Modelo Externo','Destino','Tipo Reporte','Objeto Template','Parametro Deteccion','Ajuste Realizado','Valor Anterior','Valor Nuevo','Motivo','Link Foto Antes','Link Foto Despues'],
+    templates: ['ID Template','Fecha','Hora','Turno','Responsable','Linea','Modelo Interno','Modelo Externo','Destino CO','Destino US','Destino MX','Destino GT','ROI','FrontLocal','Comentario','Link Foto Template']
+  };
+  if (preferred[type]) return preferred[type];
+  return rows[0] ? Object.keys(rows[0]) : [];
+}
+
+async function fetchAppsScriptReport(type, range) {
+  const params = new URLSearchParams({
+    type,
+    from: range.from,
+    to: range.to
+  });
+  const res = await fetch(`${APP_SCRIPT_URL}?${params.toString()}`, { cache: 'no-store' });
+  const text = await res.text();
+  const result = JSON.parse(text);
+  if (!result.ok) throw new Error(result.message || 'No se pudo cargar el reporte');
+  const rows = result.rows || [];
+  return {
+    range,
+    rows,
+    dates: rows,
+    columns: visualColumnsForType(type, rows)
+  };
+}
+
+async function getVisualReportRows() {
+  const type = getVisualReportType();
+  const range = getVisualReportQueryRange();
+  if (!range) return { range, rows: [], dates: [], columns: [] };
+  if (type === 'misjudgments') return getMisjudgmentVisualReport(range);
+  return await fetchAppsScriptReport(type, range);
+}
+
+async function updateVisualReportPreview() {
+  const box = document.getElementById('visualReportPreview');
+  if (!box) return;
+  box.textContent = 'Cargando reporte...';
+  let report;
+  try {
+    report = await getVisualReportRows();
+  } catch (err) {
+    box.textContent = 'No se pudo cargar el reporte: ' + err.message;
+    return;
+  }
+  const { range, rows, dates } = report;
+  if (!range) {
+    box.textContent = 'Selecciona un periodo para generar un reporte limpio.';
+    return;
+  }
+  if (!dates.length) {
+    box.innerHTML = `<strong>${escapeHtml(range.title)}</strong><br>No hay datos cargados para ese periodo.`;
+    return;
+  }
+  const type = getVisualReportType();
+  if (type === 'misjudgments') {
+    const activeLines = rows.filter(r => Number(r['Dias con datos']) > 0).length;
+    const worst = rows.slice().sort((a,b) => Number(b['Promedio %']) - Number(a['Promedio %']))[0];
+    box.innerHTML = `<strong>${escapeHtml(range.title)}</strong><br>${dates.length} fecha(s), ${activeLines} linea(s) con datos. Promedio mas alto: ${escapeHtml(worst?.Linea || '-')} (${escapeHtml(worst?.['Promedio %'] || '0.00')}%).`;
+    return;
+  }
+  box.innerHTML = `<strong>${escapeHtml(getVisualReportLabel(type))} - ${escapeHtml(range.title)}</strong><br>${rows.length} registro(s) encontrados.`;
+}
+
+async function visualReportCsvText() {
+  const type = getVisualReportType();
+  const { range, rows, dates, columns } = await getVisualReportRows();
+  if (!range || !dates.length) return '';
+  const header = ['Reporte', 'Periodo', ...columns];
+  const body = rows.map(row => [getVisualReportLabel(type), range.title, ...columns.map(c => row[c] ?? '')]);
+  return [header, ...body].map(row => row.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+}
+
+async function downloadVisualReportCsv() {
+  let csv = '';
+  try {
+    csv = await visualReportCsvText();
+  } catch (err) {
+    alert('No se pudo generar el CSV: ' + err.message);
+    return;
+  }
+  if (!csv) {
+    alert('No hay datos para exportar en ese periodo.');
+    return;
+  }
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `reporte-${getVisualReportType()}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function reportOfficialSeries(range) {
+  const dailySource=DATA_BY_PERIOD.general.ALL||{dates:[],data:[]};
+  const daily=dailySource.dates.map((label,index)=>({label,value:dailySource.data[index],date:parsedHeaderToDate(label)}))
+    .filter(x=>x.date&&x.date>=range.start&&x.date<=range.end&&Number.isFinite(x.value));
+  const weeklySource=DATA_BY_PERIOD.semanal.ALL||{dates:[],data:[]};
+  const weekly=weeklySource.dates.map((label,index)=>{
+    const match=String(label).match(/(\d{1,2})-(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if(!match)return null;
+    const start=new Date(+match[4],+match[3]-1,+match[1]);
+    const end=new Date(+match[4],+match[3]-1,+match[2],23,59,59);
+    return {label,value:weeklySource.data[index],start,end};
+  }).filter(x=>x&&x.end>=range.start&&x.start<=range.end&&Number.isFinite(x.value));
+  const monthNames={junary:0,january:0,february:1,march:2,april:3,may:4,jun:5,june:5,july:6,agosth:7,august:7,september:8,october:9,november:10,december:11};
+  const monthlySource=DATA_BY_PERIOD.mensual.ALL||{dates:[],data:[]};
+  const monthly=monthlySource.dates.map((label,index)=>{
+    const month=monthNames[String(label).trim().toLowerCase()];
+    if(month===undefined)return null;
+    const start=new Date(2026,month,1),end=new Date(2026,month+1,0,23,59,59);
+    return {label,value:monthlySource.data[index],start,end};
+  }).filter(x=>x&&x.end>=range.start&&x.start<=range.end&&Number.isFinite(x.value)&&x.value>0);
+  return {daily,weekly,monthly};
+}
+
+function svgReportChart(items,{type='line',color='#246bfd',height=220}={}) {
+  const clean=items.filter(x=>Number.isFinite(x.value));
+  if(!clean.length)return '<div class="empty-chart">No official ALL data available.</div>';
+  const width=760,pad=38,max=Math.max(1,...clean.map(x=>x.value))*1.12,plotW=width-pad*2,plotH=height-60;
+  const x=i=>pad+(clean.length===1?plotW/2:i*plotW/(clean.length-1));
+  const y=v=>20+plotH-(v/max)*plotH;
+  const grid=[0,.25,.5,.75,1].map(p=>`<line x1="${pad}" y1="${20+plotH*p}" x2="${width-pad}" y2="${20+plotH*p}" stroke="#e8edf5"/><text x="4" y="${24+plotH*p}" font-size="10" fill="#7c8ba1">${(max*(1-p)).toFixed(0)}%</text>`).join('');
+  let marks='';
+  if(type==='bar'){
+    const bw=Math.max(16,Math.min(58,plotW/clean.length*.55));
+    marks=clean.map((d,i)=>`<rect x="${x(i)-bw/2}" y="${y(d.value)}" width="${bw}" height="${20+plotH-y(d.value)}" rx="5" fill="${color}"/><text x="${x(i)}" y="${y(d.value)-6}" text-anchor="middle" font-size="10" fill="#334155">${d.value.toFixed(1)}%</text>`).join('');
+  }else{
+    const points=clean.map((d,i)=>`${x(i)},${y(d.value)}`).join(' ');
+    marks=`<polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round"/>`+clean.map((d,i)=>`<circle cx="${x(i)}" cy="${y(d.value)}" r="3" fill="${color}"/>`).join('');
+  }
+  const step=Math.max(1,Math.ceil(clean.length/10));
+  const labels=clean.map((d,i)=>i%step===0?`<text x="${x(i)}" y="${height-8}" text-anchor="middle" font-size="9" fill="#7c8ba1">${escapeHtml(String(d.label).slice(0,12))}</text>`:'').join('');
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" style="width:100%;height:auto">${grid}${marks}${labels}</svg>`;
+}
+
+async function printVisualReport() {
+  const type = getVisualReportType();
+  let report;
+  try {
+    report = await getVisualReportRows();
+  } catch (err) {
+    alert('No se pudo generar el PDF: ' + err.message);
+    return;
+  }
+  const { range, rows, dates, columns } = report;
+  if (!range || !dates.length) {
+    alert('No hay datos para imprimir en ese periodo.');
+    return;
+  }
+  const tableHead = columns.map(c => `<th>${escapeHtml(c)}</th>`).join('');
+  const tableRows = rows.map(row => `<tr>${columns.map(c => `<td>${escapeHtml(row[c] ?? '')}</td>`).join('')}</tr>`).join('');
+  let analyticsHtml='';
+  if(type==='misjudgments'){
+    const series=reportOfficialSeries(range);
+    const mode=document.getElementById('visualReportPeriod')?.value||'day';
+    const officialItems=mode==='month'?series.monthly:mode==='week'?series.weekly:series.daily;
+    const officialValues=officialItems.map(x=>x.value).filter(Number.isFinite);
+    const officialResult=officialValues.length?avg(officialValues):null;
+    const bestLine=rows.filter(r=>r.Linea!=='ALL'&&Number(r['Dias con datos'])>0).sort((a,b)=>Number(a['Promedio %'])-Number(b['Promedio %']))[0];
+    const criticalLine=rows.filter(r=>r.Linea!=='ALL'&&Number(r['Dias con datos'])>0).sort((a,b)=>Number(b['Promedio %'])-Number(a['Promedio %']))[0];
+    analyticsHtml=`
+      <div class="summary-grid">
+        <div class="metric"><span>Official ALL Result</span><strong>${officialResult===null?'—':officialResult.toFixed(2)+'%'}</strong><small>${escapeHtml(range.title)}</small></div>
+        <div class="metric"><span>Best Line</span><strong>${escapeHtml(bestLine?.Linea||'—')}</strong><small>${escapeHtml(bestLine?.['Promedio %']||'0.00')}% average</small></div>
+        <div class="metric"><span>Critical Line</span><strong>${escapeHtml(criticalLine?.Linea||'—')}</strong><small>${escapeHtml(criticalLine?.['Promedio %']||'0.00')}% average</small></div>
+      </div>
+      <section class="chart-card"><h2>Monthly Result</h2><p>Official ALL monthly values</p>${svgReportChart(series.monthly,{type:'bar',color:'#6d5dfc'})}</section>
+      <section class="chart-card"><h2>Weekly Breakdown</h2><p>Official ALL weekly values inside the selected period</p>${svgReportChart(series.weekly,{type:'bar',color:'#246bfd'})}</section>
+      <section class="chart-card"><h2>Daily Detail</h2><p>Official ALL daily trend inside the selected period</p>${svgReportChart(series.daily,{type:'line',color:'#0da678'})}</section>`;
+  }
+  const win = window.open('', '_blank');
+  if (!win) return;
+  win.document.write(`<!DOCTYPE html><html><head><title>Reporte ${escapeHtml(getVisualReportLabel(type))}</title>
+    <style>
+      *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;background:#f3f6fb;color:#10213a}
+      .report-shell{max-width:1000px;margin:auto;padding:32px}.report-head{background:linear-gradient(135deg,#122443,#4438a3);color:#fff;padding:28px;border-radius:18px;margin-bottom:18px}
+      h1{font-size:25px;margin:0 0 5px}.meta{color:rgba(255,255,255,.72);font-size:12px}.print-btn{margin-bottom:14px;padding:9px 14px;border:0;border-radius:9px;background:#246bfd;color:#fff;font-weight:bold}
+      .summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}.metric,.chart-card,.table-card{background:#fff;border:1px solid #e1e7f0;border-radius:14px;padding:18px;box-shadow:0 8px 24px rgba(31,55,86,.06)}
+      .metric span{display:block;color:#7c8ba1;font-size:10px;text-transform:uppercase;letter-spacing:.07em}.metric strong{display:block;font-size:27px;margin:8px 0 3px}.metric small{color:#64748b}.chart-card{margin-bottom:14px;page-break-inside:avoid}.chart-card h2{font-size:16px;margin:0}.chart-card p{font-size:11px;color:#7c8ba1;margin:4px 0 10px}.empty-chart{padding:35px;text-align:center;color:#94a3b8;background:#f8fafc;border-radius:10px}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th,td{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}
+      th{background:#edf3ff}.table-card{overflow:auto}
+      @media print{button{display:none}}
+    </style></head><body>
+    <div class="report-shell"><button class="print-btn" onclick="window.print()">Print / Save PDF</button>
+    <header class="report-head"><h1>AOI ${escapeHtml(getVisualReportLabel(type))} Report</h1><div class="meta">${escapeHtml(range.title)} · ${rows.length} records · Generated ${new Date().toLocaleString('en-US')}</div></header>
+    ${analyticsHtml}<section class="table-card"><h2>Detailed Results</h2><table><thead><tr>${tableHead}</tr></thead><tbody>${tableRows}</tbody></table></section>
+    </div></body></html>`);
+  win.document.close();
+}
+
+function setNowFields() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth()+1).padStart(2,'0');
+  const dd = String(now.getDate()).padStart(2,'0');
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mi = String(now.getMinutes()).padStart(2,'0');
+  ['chkFecha','chgFecha','tplFecha'].forEach(id => { const el = document.getElementById(id); if (el && !el.value) el.value = `${yyyy}-${mm}-${dd}`; });
+  ['chkHora','chgHora','tplHora'].forEach(id => { const el = document.getElementById(id); if (el && !el.value) el.value = `${hh}:${mi}`; });
+  setChecklistShiftDefaults(now);
+}
+
+function setChecklistShiftDefaults(now=new Date()) {
+  const turno = document.getElementById('chkTurno');
+  const momento = document.getElementById('chkMomento');
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const isDay = minutes >= 384 && minutes <= 960;
+  if (turno && !turno.dataset.userTouched) turno.selectedIndex = isDay ? 0 : 1;
+  if (momento && !momento.dataset.userTouched) {
+    const isStart = isDay ? minutes < 600 : minutes >= 990 && minutes < 1200;
+    momento.value = isStart ? 'Inicio de turno' : 'Final de turno';
+  }
+}
+
+function ensureChecklistMomentField() {
+  if (document.getElementById('chkMomento')) return;
+  const turno = document.getElementById('chkTurno');
+  const holder = turno?.closest('.form-field');
+  if (!holder) return;
+  const field = document.createElement('div');
+  field.className = 'form-field';
+  field.innerHTML = '<label>Momento</label><select id="chkMomento"><option>Inicio de turno</option><option>Final de turno</option></select>';
+  holder.insertAdjacentElement('afterend', field);
+  turno.addEventListener('change', () => { turno.dataset.userTouched = '1'; loadChecklistDraft(); });
+  field.querySelector('select').addEventListener('change', e => { e.target.dataset.userTouched = '1'; loadChecklistDraft(); });
+}
+
+function setupChecklistDraftWatchers() {
+  ['chkFecha','chkHora','chkResponsable','chkComentario'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.dataset.draftWatcher) {
+      el.dataset.draftWatcher = '1';
+      el.addEventListener('change', () => {
+        if (id === 'chkFecha') loadChecklistDraft();
+        else saveChecklistDraft();
+      });
+    }
+  });
+}
+
+function getChecklistDraftKey() {
+  const fecha = getVal('chkFecha') || new Date().toISOString().slice(0,10);
+  const turno = getVal('chkTurno') || 'Turno';
+  const momento = getVal('chkMomento') || 'Inicio de turno';
+  return `aoiChecklistDraft:${fecha}:${turno}:${momento}`;
+}
+
+function loadChecklistDraft() {
+  try {
+    CHECKLIST_DRAFT = JSON.parse(localStorage.getItem(getChecklistDraftKey()) || '{"meta":{},"lines":{}}');
+  } catch {
+    CHECKLIST_DRAFT = { meta: {}, lines: {} };
+  }
+  applyChecklistDraft();
+}
+
+function saveChecklistDraft() {
+  CHECKLIST_DRAFT.meta = {
+    fecha: getVal('chkFecha'),
+    hora: getVal('chkHora'),
+    turno: getVal('chkTurno'),
+    momento: getVal('chkMomento'),
+    responsable: getVal('chkResponsable'),
+    comentarioGeneral: getVal('chkComentario')
+  };
+  localStorage.setItem(getChecklistDraftKey(), JSON.stringify(CHECKLIST_DRAFT));
+}
+
+function getLineDraft(line) {
+  return CHECKLIST_DRAFT.lines[line] || {};
+}
+
+function updateLineCardStatus(line) {
+  const data = getLineDraft(line);
+  const card = document.querySelector(`[data-line="${line}"]`);
+  const status = document.getElementById(`${line}_status`);
+  if (!card || !status) return;
+  card.classList.remove('saved', 'uploading');
+  if (data.uploading) {
+    card.classList.add('uploading');
+    status.textContent = 'Subiendo foto...';
+  } else if (data.photo?.url || data.saved) {
+    card.classList.add('saved');
+    status.textContent = data.photo?.url ? 'Foto guardada para este turno.' : 'Linea guardada sin foto.';
+  } else {
+    status.textContent = 'Pendiente.';
+  }
+}
+
+function applyChecklistDraft() {
+  for (let i=1;i<=13;i++) {
+    const line = `L${i}`;
+    const data = getLineDraft(line);
+    const estado = document.getElementById(`${line}_estado`);
+    const comentario = document.getElementById(`${line}_comentario`);
+    if (estado && data.estado) estado.value = data.estado;
+    if (comentario && data.comentario) comentario.value = data.comentario;
+    updateLineCardStatus(line);
+  }
+}
+
+function buildLineChecklist() {
+  const box = document.getElementById('lineChecklistBox');
+  if (!box || box.children.length) return;
+  const html = Array.from({length:13}, (_,i)=>{
+    const line = `L${i+1}`;
+    return `<div class="line-card" data-line="${line}">
+      <div class="line-card-title"><span>${line}</span><span style="font-size:11px;color:var(--muted)">Inicio de turno</span></div>
+      <div class="mini-grid">
+        <label>Estado</label>
+        <select id="${line}_estado"><option>OK</option><option>NG</option><option>Sin producción</option></select>
+        <label>Foto</label>
+        <input id="${line}_foto" type="file" accept="image/*" capture="environment">
+        <label>Comentario</label>
+        <input id="${line}_comentario" placeholder="Opcional">
+      </div>
+    </div>`;
+  }).join('');
+  box.innerHTML = html;
+}
+
+function buildLineChecklist() {
+  const box = document.getElementById('lineChecklistBox');
+  if (!box || box.children.length) return;
+  const html = Array.from({length:13}, (_,i)=>{
+    const line = `L${i+1}`;
+    return `<div class="line-card" data-line="${line}">
+      <div class="line-card-title"><span>${line}</span><span style="font-size:11px;color:var(--muted)">Checklist</span></div>
+      <div class="mini-grid">
+        <label>Estado</label>
+        <select id="${line}_estado" onchange="saveChecklistLineDraft('${line}')"><option>OK</option><option>NG</option><option>Sin produccion</option></select>
+        <label>Foto</label>
+        <input id="${line}_foto" type="file" accept="image/*" capture="environment" onchange="handleChecklistPhotoChange('${line}')">
+        <label>Comentario</label>
+        <input id="${line}_comentario" placeholder="Opcional" onchange="saveChecklistLineDraft('${line}')">
+      </div>
+      <div class="line-card-actions">
+        <button type="button" class="secondary-btn small-btn" onclick="saveChecklistLineDraft('${line}')">Guardar linea</button>
+        <button type="button" class="secondary-btn small-btn" onclick="clearChecklistLineDraft('${line}')">Limpiar linea</button>
+      </div>
+      <div class="line-status" id="${line}_status">Pendiente.</div>
+    </div>`;
+  }).join('');
+  box.innerHTML = html;
+  loadChecklistDraft();
+}
+
+function saveChecklistLineDraft(line, extra={}) {
+  CHECKLIST_DRAFT.lines[line] = {
+    ...getLineDraft(line),
+    linea: line,
+    estado: getVal(`${line}_estado`),
+    comentario: getVal(`${line}_comentario`),
+    saved: true,
+    ...extra
+  };
+  saveChecklistDraft();
+  updateLineCardStatus(line);
+}
+
+async function handleChecklistPhotoChange(line) {
+  const fileInput = document.getElementById(`${line}_foto`);
+  if (!fileInput?.files?.[0]) return;
+  saveChecklistLineDraft(line, { uploading: true });
+  try {
+    const photo = await fileObjToPayload(fileInput.files[0]);
+    if (!photo?.url) throw new Error('No se pudo subir la foto');
+    saveChecklistLineDraft(line, { photo, uploading: false });
+  } catch (err) {
+    saveChecklistLineDraft(line, { uploading: false, saved: false });
+    alert('No se pudo guardar la foto de ' + line + ': ' + err.message);
+  }
+}
+
+function clearChecklistLineDraft(line) {
+  delete CHECKLIST_DRAFT.lines[line];
+  const foto = document.getElementById(`${line}_foto`);
+  const comentario = document.getElementById(`${line}_comentario`);
+  const estado = document.getElementById(`${line}_estado`);
+  if (foto) foto.value = '';
+  if (comentario) comentario.value = '';
+  if (estado) estado.value = 'OK';
+  saveChecklistDraft();
+  updateLineCardStatus(line);
+}
+
+function clearChecklist() {
+  localStorage.removeItem(getChecklistDraftKey());
+  CHECKLIST_DRAFT = { meta: {}, lines: {} };
+  ['chkResponsable','chkComentario'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  for (let i=1;i<=13;i++) {
+    const estado=document.getElementById(`L${i}_estado`), foto=document.getElementById(`L${i}_foto`), com=document.getElementById(`L${i}_comentario`);
+    if (estado) estado.value='OK';
+    if (foto) foto.value='';
+    if (com) com.value='';
+    updateLineCardStatus(`L${i}`);
+  }
+  setNowFields();
+}
+
+function clearChanges() {
+  ['chgResponsable','modeloInterno','destino','comentarioPfa','objetoTemplate','objetoExacto','parametro','motivo','accion','resultado','fotoAntes','fotoDespues','archivoExtra'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  ['chgLinea','modeloExterno'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  const ext = document.getElementById('modeloExterno'); if (ext) ext.innerHTML = '<option value="">Primero escribe modelo interno</option>';
+  resetAdjustments();
+  const tipo=document.getElementById('tipoCambio'), pfa=document.getElementById('pfa');
+  if(tipo) tipo.value='Cambio de parámetro AOI';
+  if(pfa) pfa.value='No';
+  setNowFields();
+}
+
+function templateItemHtml(name, type, idx, required=true) {
+  const prefix = required ? 'req' : 'opt';
+  const safe = `${prefix}_${idx}`;
+  const badge = required ? '<span class="required-badge">Obligatorio</span>' : '<span class="optional-badge">Opcional</span>';
+  const cls = required ? 'required' : 'optional';
+  return `<div class="template-item ${cls}">
+    <div class="template-item-head"><div class="template-item-title">${name}</div>${badge}</div>
+    <div class="template-item-row">
+      <label>Estado</label>
+      <select id="tpl_${safe}_estado"><option>OK</option><option>Falta</option><option>No aplica</option></select>
+      <label>Cantidad / detalle</label>
+      <input id="tpl_${safe}_detalle" placeholder="Ej. FrontLocal11-33, 4 destinos, MB screw OK">
+      <label>Comentario</label>
+      <input id="tpl_${safe}_comentario" placeholder="Opcional">
+    </div>
+  </div>`;
+}
+
+function buildTemplateChecklist() {
+  const reqBox = document.getElementById('templateRequiredBox');
+  const optBox = document.getElementById('templateOptionalBox');
+  if (reqBox && !reqBox.children.length) {
+    reqBox.innerHTML = TEMPLATE_REQUIRED_OBJECTS.map((name,i)=>templateItemHtml(name,'required',i,true)).join('');
+  }
+  if (optBox && !optBox.children.length) {
+    optBox.innerHTML = TEMPLATE_OPTIONAL_OBJECTS.map((name,i)=>templateItemHtml(name,'optional',i,false)).join('');
+  }
+}
+
+function addExtraTemplateObject() {
+  const box = document.getElementById('templateOptionalBox');
+  if (!box) return;
+  extraTemplateObjectCount++;
+  const div = document.createElement('div');
+  div.className = 'template-item optional';
+  div.innerHTML = `<div class="template-item-head"><div class="template-item-title">Objeto extra</div><span class="optional-badge">Extra</span></div>
+    <div class="template-item-row">
+      <label>Objeto</label>
+      <input id="tpl_extra_${extraTemplateObjectCount}_nombre" placeholder="Nombre del objeto">
+      <label>Estado</label>
+      <select id="tpl_extra_${extraTemplateObjectCount}_estado"><option>OK</option><option>Falta</option><option>No aplica</option></select>
+      <label>Comentario</label>
+      <input id="tpl_extra_${extraTemplateObjectCount}_comentario" placeholder="Opcional">
+    </div>`;
+  box.appendChild(div);
+}
+
+function filterTemplateModelOptions() {
+  const val = (document.getElementById('tplModeloInterno')?.value || '').trim().toUpperCase();
+  const extSel = document.getElementById('tplModeloExterno');
+  if (!extSel) return;
+  const matches = MODEL_DB.filter(r => r.internal && r.internal.toUpperCase().includes(val));
+  const externals = [...new Set(matches.map(r => r.external).filter(Boolean))].sort();
+  extSel.innerHTML = externals.length
+    ? '<option value="">Selecciona modelo externo</option>' + externals.map(x => `<option>${x}</option>`).join('')
+    : '<option value="">Sin coincidencias</option>';
+}
+
+function clearTemplateReport() {
+  ['tplResponsable','tplLinea','tplModeloInterno','tplComentario','tplFoto','tplArchivoExtra'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  ['tplDestCO','tplDestUS','tplDestMX','tplDestGT'].forEach(id => { const el=document.getElementById(id); if(el) el.checked=false; });
+  const ext = document.getElementById('tplModeloExterno'); if (ext) ext.innerHTML = '<option value="">Primero escribe modelo interno</option>';
+  document.querySelectorAll('#templateRequiredBox select, #templateOptionalBox select').forEach(el => el.value='OK');
+  document.querySelectorAll('#templateRequiredBox input, #templateOptionalBox input').forEach(el => el.value='');
+  setNowFields();
+}
+
+// ── Guardado Google Sheets / Drive ─────────────────────────────
+function getVal(id) {
+  return document.getElementById(id)?.value || '';
+}
+
+function getChecked(id) {
+  return !!document.getElementById(id)?.checked;
+}
+
+function setButtonLoading(btn, loadingText='Guardando…') {
+  if (!btn) return;
+  btn.dataset.originalText = btn.textContent;
+  btn.textContent = loadingText;
+  btn.disabled = true;
+}
+
+function restoreButton(btn) {
+  if (!btn) return;
+  btn.textContent = btn.dataset.originalText || 'Guardar';
+  btn.disabled = false;
+}
+
+async function fileToPayload(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input || !input.files || !input.files[0]) return null;
+  return await fileObjToPayload(input.files[0]);
+}
+
+const CLOUDINARY_CLOUD = 'di7azspbf';
+const CLOUDINARY_PRESET = 'aoi_system';
+
+async function fileObjToPayload(file) {
+  if (!file) return null;
+  try {
+    // Subir directo a Cloudinary, solo mandar el link al Apps Script
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_PRESET);
+    formData.append('folder', 'AOI_System');
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok || !data.secure_url) throw new Error(data.error?.message || 'Cloudinary error ' + res.status);
+    return { url: data.secure_url, name: file.name, mimeType: file.type };
+  } catch(e) {
+    console.error('Error subiendo a Cloudinary:', e);
+    return null;
+  }
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function compressImageToPayload(file, maxSize, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxSize) {
+          height = Math.round(height * maxSize / width);
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = Math.round(width * maxSize / height);
+          height = maxSize;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve({
+          name: file.name.replace(/\.[^.]+$/, '') + '.jpg',
+          mimeType: 'image/jpeg',
+          data: dataUrl.split(',')[1]
+        });
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function postToAppsScript(payload) {
+  const response = await fetch(APP_SCRIPT_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+
+  const text = await response.text();
+  console.log('Apps Script response:', text);
+
+  let result;
+  try {
+    result = JSON.parse(text);
+  } catch {
+    // Apps Script respondio pero no es JSON valido — igual se guardo
+    return { ok: true };
+  }
+
+  if (!result.ok) throw new Error(result.message || 'Error en el servidor');
+  return result;
+}
+
+
+async function saveChecklistReport() {
+  const btn = event?.target;
+  try {
+    setButtonLoading(btn);
+    const lines = [];
+    for (let i = 1; i <= 13; i++) {
+      lines.push({
+        linea: `L${i}`,
+        estado: getVal(`L${i}_estado`),
+        comentario: getVal(`L${i}_comentario`),
+        photo: getLineDraft(`L${i}`).photo || await fileToPayload(`L${i}_foto`)
+      });
+    }
+
+    const payload = {
+      type: 'checklist',
+      fecha: getVal('chkFecha'),
+      hora: getVal('chkHora'),
+      turno: getVal('chkTurno'),
+      momento: getVal('chkMomento'),
+      responsable: getVal('chkResponsable'),
+      comentarioGeneral: getVal('chkComentario'),
+      lines
+    };
+
+    await postToAppsScript(payload);
+    alert('Checklist enviado. Revisa Google Sheets y Drive para confirmar el guardado.');
+  } catch (err) {
+    alert('Error al guardar checklist: ' + err.message);
+  } finally {
+    restoreButton(btn);
+  }
+}
+
+function collectAdjustments() {
+  return [...document.querySelectorAll('#ajustesBox .adjustment-row')].map(row => ({
+    tipo: row.querySelector('.ajusteTipo')?.value || '',
+    valorAnterior: row.querySelector('.ajusteAnterior')?.value || '',
+    valorNuevo: row.querySelector('.ajusteNuevo')?.value || ''
+  })).filter(x => x.tipo || x.valorAnterior || x.valorNuevo);
+}
+
+async function saveChangesReport() {
+  const btn = event?.target;
+  try {
+    setButtonLoading(btn);
+    const payload = {
+      type: 'cambios',
+      fecha: getVal('chgFecha'),
+      hora: getVal('chgHora'),
+      turno: getVal('chgTurno'),
+      responsable: getVal('chgResponsable'),
+      linea: getVal('chgLinea'),
+      modeloInterno: getVal('modeloInterno'),
+      modeloExterno: getVal('modeloExterno'),
+      destino: getVal('destino'),
+      tipoReporte: getVal('tipoCambio'),
+      pfaCorregido: getVal('pfa'),
+      comentarioPfa: getVal('comentarioPfa'),
+      objetoTemplate: getVal('objetoTemplate'),
+      objetoExacto: getVal('objetoExacto'),
+      parametroDeteccion: getVal('parametro'),
+      ajustes: collectAdjustments(),
+      motivo: getVal('motivo'),
+      accionRealizada: getVal('accion'),
+      resultadoEsperado: getVal('resultado'),
+      fotoAntes: await fileToPayload('fotoAntes'),
+      fotoDespues: await fileToPayload('fotoDespues'),
+      archivo: await fileToPayload('archivoExtra')
+    };
+
+    await postToAppsScript(payload);
+    alert('Registro de cambios enviado. Revisa Google Sheets y Drive para confirmar el guardado.');
+  } catch (err) {
+    alert('Error al guardar registro: ' + err.message);
+  } finally {
+    restoreButton(btn);
+  }
+}
+
+function getTemplateStatus(prefix, index) {
+  return {
+    estado: getVal(`tpl_${prefix}_${index}_estado`),
+    detalle: getVal(`tpl_${prefix}_${index}_detalle`),
+    comentario: getVal(`tpl_${prefix}_${index}_comentario`)
+  };
+}
+
+function collectTemplateOptionalObjects() {
+  const items = [];
+  TEMPLATE_OPTIONAL_OBJECTS.forEach((name, i) => {
+    const st = getTemplateStatus('opt', i);
+    if (st.estado === 'OK' || st.detalle || st.comentario) {
+      items.push(`${name} | ${st.estado} | ${st.detalle} | ${st.comentario}`);
+    }
+  });
+
+  for (let i = 1; i <= extraTemplateObjectCount; i++) {
+    const nombre = getVal(`tpl_extra_${i}_nombre`);
+    const estado = getVal(`tpl_extra_${i}_estado`);
+    const comentario = getVal(`tpl_extra_${i}_comentario`);
+    if (nombre || comentario) items.push(`${nombre} | ${estado} | ${comentario}`);
+  }
+  return items;
+}
+
+async function saveTemplateReport() {
+  const btn = event?.target;
+  try {
+    setButtonLoading(btn);
+    const req = TEMPLATE_REQUIRED_OBJECTS.map((name, i) => ({ name, ...getTemplateStatus('req', i) }));
+    const payload = {
+      type: 'templates',
+      fecha: getVal('tplFecha'),
+      hora: getVal('tplHora'),
+      turno: getVal('tplTurno'),
+      responsable: getVal('tplResponsable'),
+      linea: getVal('tplLinea'),
+      modeloInterno: getVal('tplModeloInterno'),
+      modeloExterno: getVal('tplModeloExterno'),
+      destinoCO: getChecked('tplDestCO'),
+      destinoUS: getChecked('tplDestUS'),
+      destinoMX: getChecked('tplDestMX'),
+      destinoGT: getChecked('tplDestGT'),
+      roi: req[0]?.estado === 'OK',
+      frontLocal: req[1]?.estado === 'OK',
+      copiesDestinos: req[2]?.estado === 'OK',
+      mbScrews: req[3]?.estado === 'OK',
+      powerConnection: req[4]?.estado === 'OK',
+      tapes: req[5]?.estado === 'OK',
+      connectionsMb: req[6]?.estado === 'OK',
+      objetosObligatoriosDetalle: req.map(x => `${x.name} | ${x.estado} | ${x.detalle} | ${x.comentario}`),
+      objetosAdicionales: collectTemplateOptionalObjects(),
+      comentario: getVal('tplComentario'),
+      fotoTemplate: await fileToPayload('tplFoto'),
+      archivoAdicional: await fileToPayload('tplArchivoExtra')
+    };
+
+    await postToAppsScript(payload);
+    alert('Registro de template enviado. Revisa Google Sheets y Drive para confirmar el guardado.');
+  } catch (err) {
+    alert('Error al guardar template: ' + err.message);
+  } finally {
+    restoreButton(btn);
+  }
+}
+
+function startAutoRefresh() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  autoRefreshTimer = setInterval(() => {
+    if (document.visibilityState !== 'hidden') loadData();
+  }, AUTO_REFRESH_MS);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') loadData();
+});
+
+
+function removeDuplicateOptions(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const seen = new Set();
+  Array.from(sel.options).forEach(opt => {
+    const key = opt.textContent.trim().toLowerCase();
+    if (!key) return;
+    if (seen.has(key)) opt.remove();
+    else seen.add(key);
+  });
+}
+
+function cleanReportSelectors() {
+  removeDuplicateOptions('objetoTemplate');
+  removeDuplicateOptions('parametro');
+}
+
+window.addEventListener('load', () => {
+  moveDataSourceToBottom();
+  ensureChecklistMomentField();
+  setNowFields();
+  setupChecklistDraftWatchers();
+  buildLineChecklist();
+  buildTemplateChecklist();
+  resetAdjustments();
+  loadModelDB();
+  loadData();
+  startAutoRefresh();
+});
+</script>
+</body>
+</html>

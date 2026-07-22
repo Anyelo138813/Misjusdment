@@ -117,6 +117,14 @@
   .target-field input:focus { border-color:var(--brand); }
   .target-actions { display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px; }
   .target-save-status { font-size:11px;color:var(--ok); }
+  .dashboard-report-card { display:flex;align-items:center;justify-content:space-between;gap:18px;background:linear-gradient(135deg,#fff 0%,#f7f9ff 58%,#edf1ff 100%);border-color:rgba(109,93,252,.18); }
+  .dashboard-report-copy { min-width:0; }
+  .dashboard-report-kicker { font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--brand2);margin-bottom:5px; }
+  .dashboard-report-title { font-size:17px;font-weight:800;letter-spacing:-.02em;color:var(--text); }
+  .dashboard-report-text { font-size:11px;color:var(--muted);margin-top:4px;line-height:1.45; }
+  .dashboard-report-period { display:inline-flex;margin-top:10px;padding:5px 10px;border-radius:999px;background:#fff;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2); }
+  .dashboard-report-actions { display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0; }
+  @media (max-width:720px) { .dashboard-report-card { align-items:flex-start;flex-direction:column; }.dashboard-report-actions { justify-content:flex-start; } }
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fac775; border-top-color: #854f0b; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 4px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .filter-label { font-size: 12px; color: var(--muted); }
@@ -340,6 +348,19 @@
     <div id="trendView"><div class="chart-wrap"><canvas id="mainChart" role="img" aria-label="Tasa Misjusdments por línea"></canvas></div></div>
     <div id="barsView" style="display:none;"></div>
     <div id="heatView" style="display:none;"></div>
+  </div>
+
+  <div class="card dashboard-report-card" id="dashboardReportCenter">
+    <div class="dashboard-report-copy">
+      <div class="dashboard-report-kicker">Quick report</div>
+      <div class="dashboard-report-title">Misjudgment Report Center</div>
+      <div class="dashboard-report-text">Generate the report using the period currently selected in the dashboard.</div>
+      <div class="dashboard-report-period" id="dashboardReportPeriod">Waiting for dashboard data…</div>
+    </div>
+    <div class="dashboard-report-actions">
+      <button class="primary-btn" type="button" onclick="generateDashboardReport('pdf')">Generate Performance PDF</button>
+      <button class="secondary-btn" type="button" onclick="generateDashboardReport('csv')">Export Misjudgments CSV</button>
+    </div>
   </div>
 
   <div class="card insights-card" id="insightsCard">
@@ -613,6 +634,7 @@ const AUTO_REFRESH_MS = 60000;
 let autoRefreshTimer = null;
 let dataSourceUnlocked = false;
 let targetSettingsUnlocked = false;
+let dashboardReportLines = null;
 let CHECKLIST_DRAFT = { meta: {}, lines: {} };
 
 // ── Carga CSV ──────────────────────────────────────────────────
@@ -975,6 +997,7 @@ function getFilteredData(line) {
 function onFilterChange() {
   buildKPI();
   buildCurrentView();
+  updateDashboardReportCenter();
 }
 
 function onDailyMonthChange() {
@@ -1113,6 +1136,7 @@ function buildAll() {
   buildKPI();
   buildLegend();
   buildCurrentView();
+  updateDashboardReportCenter();
 }
 
 function buildKPI() {
@@ -1149,6 +1173,7 @@ function toggleLine(l) {
   if(hiddenLines.has(l)) hiddenLines.delete(l); else hiddenLines.add(l);
   buildLegend();
   if(currentView==='trend') buildTrend();
+  updateDashboardReportCenter();
 }
 
 // ── Tendencia ──────────────────────────────────────────────────
@@ -1485,6 +1510,7 @@ function toggleReportSubmenu(event,button) {
 }
 
 function openReportCenterType(type,btn) {
+  dashboardReportLines=null;
   openWorkspaceSection('reportesPage','downloadsReport',btn);
   const select=document.getElementById('visualReportType');
   if(select)select.value=type;
@@ -1753,6 +1779,85 @@ function getVisualReportRange() {
   return { title: `Dia ${value}`, start: date, end: new Date(value + 'T23:59:59') };
 }
 
+function getDashboardReportRange() {
+  const firstLine=Object.keys(DATA)[0];
+  if(!firstLine)return null;
+  const filtered=getFilteredData(firstLine);
+  const parsedDates=[];
+
+  if(currentPeriod==='general') {
+    filtered.dates.forEach(raw=>{
+      const date=parsedHeaderToDate(raw);
+      if(date)parsedDates.push(date);
+    });
+  } else if(currentPeriod==='semanal') {
+    filtered.dates.forEach(label=>{
+      const match=String(label).match(/(\d{1,2})-(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if(!match)return;
+      parsedDates.push(new Date(+match[4],+match[3]-1,+match[1]));
+      parsedDates.push(new Date(+match[4],+match[3]-1,+match[2]));
+    });
+  } else {
+    const dailyDates=Object.values(DATA_BY_PERIOD.general)[0]?.dates||[];
+    const availableYears=dailyDates.map(parseDateHeader).filter(Boolean).map(x=>x.year);
+    const year=availableYears.length?Math.max(...availableYears):new Date().getFullYear();
+    const monthMap={january:0,junary:0,february:1,march:2,april:3,may:4,june:5,jun:5,july:6,august:7,agosth:7,september:8,october:9,november:10,december:11};
+    filtered.dates.forEach(label=>{
+      const month=monthMap[String(label).trim().toLowerCase()];
+      if(month===undefined)return;
+      parsedDates.push(new Date(year,month,1));
+      parsedDates.push(new Date(year,month+1,0));
+    });
+  }
+
+  if(!parsedDates.length)return null;
+  const start=new Date(Math.min(...parsedDates));
+  const end=new Date(Math.max(...parsedDates));
+  end.setHours(23,59,59,999);
+  return {start,end,from:dateToInputValue(start),to:dateToInputValue(end)};
+}
+
+function updateDashboardReportCenter() {
+  const badge=document.getElementById('dashboardReportPeriod');
+  if(!badge)return;
+  const range=getDashboardReportRange();
+  const selected=getDashboardSelectedLines();
+  badge.textContent=range ? `${selected.length?selected.join(', '):'No lines selected'} · ${getPeriodTitle()} · ${range.from} to ${range.to}` : 'No reportable data in the selected period';
+}
+
+function getDashboardSelectedLines() {
+  return lines().filter(line=>!hiddenLines.has(line));
+}
+
+function syncDashboardPeriodToReportBuilder() {
+  const range=getDashboardReportRange();
+  if(!range)return false;
+  const type=document.getElementById('visualReportType');
+  const period=document.getElementById('visualReportPeriod');
+  const start=document.getElementById('visualReportStart');
+  const end=document.getElementById('visualReportEnd');
+  if(type)type.value='misjudgments';
+  if(period)period.value='range';
+  if(start)start.value=range.from;
+  if(end)end.value=range.to;
+  toggleVisualReportInputs();
+  return true;
+}
+
+function generateDashboardReport(format) {
+  if(!syncDashboardPeriodToReportBuilder()){
+    alert('No hay datos para generar el reporte en el periodo seleccionado.');
+    return;
+  }
+  dashboardReportLines=getDashboardSelectedLines();
+  if(!dashboardReportLines.length){
+    alert('Selecciona al menos una linea para generar el reporte.');
+    return;
+  }
+  if(format==='pdf')printVisualReport();
+  else downloadVisualReportCsv();
+}
+
 function getVisualReportType() {
   return document.getElementById('visualReportType')?.value || 'misjudgments';
 }
@@ -1779,7 +1884,8 @@ function getVisualReportQueryRange() {
 
 function getMisjudgmentVisualReport(range) {
   const source=DATA_BY_PERIOD.general;
-  const sourceLines=Object.keys(source);
+  const allSourceLines=Object.keys(source);
+  const sourceLines=dashboardReportLines?.length ? allSourceLines.filter(line=>dashboardReportLines.includes(line)) : allSourceLines;
   if (!range || !sourceLines.length) return { range, rows: [], dates: [], columns: [] };
   const firstLine = sourceLines[0];
   const reportDates = (source[firstLine]?.dates || []).map((raw, index) => ({ raw, index, date: parsedHeaderToDate(raw) }))
@@ -1904,11 +2010,11 @@ async function downloadVisualReportCsv() {
   URL.revokeObjectURL(link.href);
 }
 
-function reportOfficialSeries(range) {
-  const dailySource=DATA_BY_PERIOD.general.ALL||{dates:[],data:[]};
+function reportLineSeries(range,line='ALL') {
+  const dailySource=DATA_BY_PERIOD.general[line]||{dates:[],data:[]};
   const daily=dailySource.dates.map((label,index)=>({label,value:dailySource.data[index],date:parsedHeaderToDate(label)}))
     .filter(x=>x.date&&x.date>=range.start&&x.date<=range.end&&Number.isFinite(x.value));
-  const weeklySource=DATA_BY_PERIOD.semanal.ALL||{dates:[],data:[]};
+  const weeklySource=DATA_BY_PERIOD.semanal[line]||{dates:[],data:[]};
   const weekly=weeklySource.dates.map((label,index)=>{
     const match=String(label).match(/(\d{1,2})-(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     if(!match)return null;
@@ -1917,7 +2023,7 @@ function reportOfficialSeries(range) {
     return {label,value:weeklySource.data[index],start,end};
   }).filter(x=>x&&x.end>=range.start&&x.start<=range.end&&Number.isFinite(x.value));
   const monthNames={junary:0,january:0,february:1,march:2,april:3,may:4,jun:5,june:5,july:6,agosth:7,august:7,september:8,october:9,november:10,december:11};
-  const monthlySource=DATA_BY_PERIOD.mensual.ALL||{dates:[],data:[]};
+  const monthlySource=DATA_BY_PERIOD.mensual[line]||{dates:[],data:[]};
   const monthly=monthlySource.dates.map((label,index)=>{
     const month=monthNames[String(label).trim().toLowerCase()];
     if(month===undefined)return null;
@@ -1929,7 +2035,7 @@ function reportOfficialSeries(range) {
 
 function svgReportChart(items,{type='line',color='#246bfd',height=220}={}) {
   const clean=items.filter(x=>Number.isFinite(x.value));
-  if(!clean.length)return '<div class="empty-chart">No official ALL data available.</div>';
+  if(!clean.length)return '<div class="empty-chart">No data available for this line and period.</div>';
   const width=760,pad=38,max=Math.max(1,...clean.map(x=>x.value))*1.12,plotW=width-pad*2,plotH=height-60;
   const x=i=>pad+(clean.length===1?plotW/2:i*plotW/(clean.length-1));
   const y=v=>20+plotH-(v/max)*plotH;
@@ -1965,22 +2071,26 @@ async function printVisualReport() {
   const tableRows = rows.map(row => `<tr>${columns.map(c => `<td>${escapeHtml(row[c] ?? '')}</td>`).join('')}</tr>`).join('');
   let analyticsHtml='';
   if(type==='misjudgments'){
-    const series=reportOfficialSeries(range);
     const mode=document.getElementById('visualReportPeriod')?.value||'day';
-    const officialItems=mode==='month'?series.monthly:mode==='week'?series.weekly:series.daily;
-    const officialValues=officialItems.map(x=>x.value).filter(Number.isFinite);
-    const officialResult=officialValues.length?avg(officialValues):null;
-    const bestLine=rows.filter(r=>r.Linea!=='ALL'&&Number(r['Dias con datos'])>0).sort((a,b)=>Number(a['Promedio %'])-Number(b['Promedio %']))[0];
-    const criticalLine=rows.filter(r=>r.Linea!=='ALL'&&Number(r['Dias con datos'])>0).sort((a,b)=>Number(b['Promedio %'])-Number(a['Promedio %']))[0];
+    const chartLines=dashboardReportLines?.length ? dashboardReportLines.filter(line=>DATA_BY_PERIOD.general[line]) : ['ALL'];
+    const activeRows=rows.filter(r=>Number(r['Dias con datos'])>0);
+    const bestLine=[...activeRows].sort((a,b)=>Number(a['Promedio %'])-Number(b['Promedio %']))[0];
+    const criticalLine=[...activeRows].sort((a,b)=>Number(b['Promedio %'])-Number(a['Promedio %']))[0];
+    const chartSections=chartLines.map((line,index)=>{
+      const series=reportLineSeries(range,line);
+      const color=line==='ALL'?'#6d5dfc':COLORS[Math.max(0,Number(line.replace('L',''))-1)%COLORS.length];
+      return `<section class="line-report"><h2 class="line-report-title">${escapeHtml(line)} Performance</h2>
+        <section class="chart-card"><h2>Monthly Result</h2><p>${escapeHtml(line)} monthly values</p>${svgReportChart(series.monthly,{type:'bar',color})}</section>
+        <section class="chart-card"><h2>Weekly Breakdown</h2><p>${escapeHtml(line)} weekly values inside the selected period</p>${svgReportChart(series.weekly,{type:'bar',color})}</section>
+        <section class="chart-card"><h2>Daily Detail</h2><p>${escapeHtml(line)} daily trend inside the selected period</p>${svgReportChart(series.daily,{type:'line',color})}</section></section>`;
+    }).join('');
     analyticsHtml=`
       <div class="summary-grid">
-        <div class="metric"><span>Official ALL Result</span><strong>${officialResult===null?'—':officialResult.toFixed(2)+'%'}</strong><small>${escapeHtml(range.title)}</small></div>
+        <div class="metric"><span>Selected Lines</span><strong>${chartLines.length}</strong><small>${escapeHtml(chartLines.join(', '))}</small></div>
         <div class="metric"><span>Best Line</span><strong>${escapeHtml(bestLine?.Linea||'—')}</strong><small>${escapeHtml(bestLine?.['Promedio %']||'0.00')}% average</small></div>
         <div class="metric"><span>Critical Line</span><strong>${escapeHtml(criticalLine?.Linea||'—')}</strong><small>${escapeHtml(criticalLine?.['Promedio %']||'0.00')}% average</small></div>
       </div>
-      <section class="chart-card"><h2>Monthly Result</h2><p>Official ALL monthly values</p>${svgReportChart(series.monthly,{type:'bar',color:'#6d5dfc'})}</section>
-      <section class="chart-card"><h2>Weekly Breakdown</h2><p>Official ALL weekly values inside the selected period</p>${svgReportChart(series.weekly,{type:'bar',color:'#246bfd'})}</section>
-      <section class="chart-card"><h2>Daily Detail</h2><p>Official ALL daily trend inside the selected period</p>${svgReportChart(series.daily,{type:'line',color:'#0da678'})}</section>`;
+      ${chartSections}`;
   }
   const win = window.open('', '_blank');
   if (!win) return;
@@ -1990,7 +2100,7 @@ async function printVisualReport() {
       .report-shell{max-width:1000px;margin:auto;padding:32px}.report-head{background:linear-gradient(135deg,#122443,#4438a3);color:#fff;padding:28px;border-radius:18px;margin-bottom:18px}
       h1{font-size:25px;margin:0 0 5px}.meta{color:rgba(255,255,255,.72);font-size:12px}.print-btn{margin-bottom:14px;padding:9px 14px;border:0;border-radius:9px;background:#246bfd;color:#fff;font-weight:bold}
       .summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}.metric,.chart-card,.table-card{background:#fff;border:1px solid #e1e7f0;border-radius:14px;padding:18px;box-shadow:0 8px 24px rgba(31,55,86,.06)}
-      .metric span{display:block;color:#7c8ba1;font-size:10px;text-transform:uppercase;letter-spacing:.07em}.metric strong{display:block;font-size:27px;margin:8px 0 3px}.metric small{color:#64748b}.chart-card{margin-bottom:14px;page-break-inside:avoid}.chart-card h2{font-size:16px;margin:0}.chart-card p{font-size:11px;color:#7c8ba1;margin:4px 0 10px}.empty-chart{padding:35px;text-align:center;color:#94a3b8;background:#f8fafc;border-radius:10px}
+      .metric span{display:block;color:#7c8ba1;font-size:10px;text-transform:uppercase;letter-spacing:.07em}.metric strong{display:block;font-size:27px;margin:8px 0 3px}.metric small{color:#64748b}.line-report{page-break-before:auto}.line-report-title{font-size:20px;margin:22px 0 10px}.chart-card{margin-bottom:14px;page-break-inside:avoid}.chart-card h2{font-size:16px;margin:0}.chart-card p{font-size:11px;color:#7c8ba1;margin:4px 0 10px}.empty-chart{padding:35px;text-align:center;color:#94a3b8;background:#f8fafc;border-radius:10px}
       table{width:100%;border-collapse:collapse;font-size:12px}
       th,td{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}
       th{background:#edf3ff}.table-card{overflow:auto}

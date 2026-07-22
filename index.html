@@ -295,9 +295,9 @@
   </div>
 
   <!-- Charts -->
-  <div class="card">
+  <div class="card" id="targetSettingsCard">
     <details class="target-settings" id="targetSettings">
-      <summary>Target Configuration</summary>
+      <summary onclick="toggleTargetSettings(event)">Target Configuration</summary>
       <p class="target-settings-help">Edit the target percentage for each line and for ALL. Changes are saved in this browser and shown as dotted lines on the chart.</p>
       <div class="target-grid" id="targetGrid"><span class="filter-label">Waiting for data…</span></div>
       <div class="target-actions">
@@ -612,6 +612,7 @@ let TARGET_OVERRIDES = loadTargetOverrides();
 const AUTO_REFRESH_MS = 60000;
 let autoRefreshTimer = null;
 let dataSourceUnlocked = false;
+let targetSettingsUnlocked = false;
 let CHECKLIST_DRAFT = { meta: {}, lines: {} };
 
 // ── Carga CSV ──────────────────────────────────────────────────
@@ -718,6 +719,7 @@ function buildTargetSettings() {
 }
 
 function saveTargetSettings() {
+  if(!ensureTargetSettingsAccess())return;
   document.querySelectorAll('[data-target-line]').forEach(input=>{
     const value=Number(input.value);
     if(Number.isFinite(value)&&value>=0&&value<=105) TARGET_OVERRIDES[input.dataset.targetLine]=value;
@@ -731,6 +733,7 @@ function saveTargetSettings() {
 }
 
 function resetTargetSettings() {
+  if(!ensureTargetSettingsAccess())return;
   TARGET_OVERRIDES={};
   localStorage.removeItem(TARGET_STORAGE_KEY);
   Object.values(DATA_BY_PERIOD).forEach(period=>Object.values(period).forEach(item=>{if(Number.isFinite(item.sheetTarget))item.target=item.sheetTarget;}));
@@ -1600,6 +1603,21 @@ function openReportsSheet(reportKey) {
   openProtectedSheet(reportKey);
 }
 
+function ensureTargetSettingsAccess() {
+  if(targetSettingsUnlocked)return true;
+  if(!requestSheetPassword())return false;
+  targetSettingsUnlocked=true;
+  return true;
+}
+
+function toggleTargetSettings(event) {
+  event.preventDefault();
+  const panel=document.getElementById('targetSettings');
+  if(!panel)return;
+  if(panel.open){panel.open=false;return;}
+  if(ensureTargetSettingsAccess())panel.open=true;
+}
+
 function requestDataSourcePassword() {
   const password = prompt('Ingresa la contrasena para desbloquear la fuente de datos:');
   if (password === null) return false;
@@ -1633,9 +1651,12 @@ function loadProtectedDataSource() {
 
 function moveDataSourceToBottom() {
   const card = document.getElementById('dataSourceCard');
+  const targetCard = document.getElementById('targetSettingsCard');
   const dashboard = document.getElementById('dashboardPage');
   const footer = dashboard?.querySelector('.sheet-footer');
-  if (card && dashboard && footer) dashboard.insertBefore(card, footer);
+  if (!dashboard || !footer) return;
+  if (card) dashboard.insertBefore(card, footer);
+  if (targetCard) dashboard.insertBefore(targetCard, footer);
 }
 
 function buildDownloadReportsGrid() {

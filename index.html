@@ -101,6 +101,21 @@
   .daily-date-filter input { font-size:12px;padding:6px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:inherit;outline:none; }
   .daily-date-filter input:focus { border-color:var(--brand);background:#fff; }
   .clear-date-btn { border:0;background:transparent;color:var(--brand);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap; }
+  .date-range-filter { display:flex;align-items:center;gap:7px;flex-wrap:wrap; }
+  .date-range-filter input { font-size:12px;padding:6px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:inherit;outline:none; }
+  .date-range-filter input:focus { border-color:var(--brand);background:#fff; }
+  .target-settings summary { cursor:pointer;font-size:13px;font-weight:700;color:var(--text);list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px; }
+  .target-settings summary::-webkit-details-marker { display:none; }
+  .target-settings summary::after { content:'+';font-size:20px;color:var(--brand);font-weight:400; }
+  .target-settings[open] summary::after { content:'−'; }
+  .target-settings-help { font-size:11px;color:var(--muted);margin:8px 0 14px; }
+  .target-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px; }
+  .target-field { display:flex;flex-direction:column;gap:5px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:11px; }
+  .target-field label { font-size:11px;font-weight:700;color:var(--text2); }
+  .target-field input { width:100%;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text);padding:7px 9px;font:12px inherit;outline:none; }
+  .target-field input:focus { border-color:var(--brand); }
+  .target-actions { display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px; }
+  .target-save-status { font-size:11px;color:var(--ok); }
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fac775; border-top-color: #854f0b; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 4px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .filter-label { font-size: 12px; color: var(--muted); }
@@ -280,6 +295,19 @@
 
   <!-- Charts -->
   <div class="card">
+    <details class="target-settings" id="targetSettings">
+      <summary>Target Configuration</summary>
+      <p class="target-settings-help">Edit the target percentage for each line and for ALL. Changes are saved in this browser and shown as dotted lines on the chart.</p>
+      <div class="target-grid" id="targetGrid"><span class="filter-label">Waiting for data…</span></div>
+      <div class="target-actions">
+        <button class="pill active" type="button" onclick="saveTargetSettings()">Save targets</button>
+        <button class="pill" type="button" onclick="resetTargetSettings()">Use sheet values</button>
+        <span class="target-save-status" id="targetSaveStatus"></span>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
     <!-- Vista + periodo + filtro mes/semana -->
     <div class="controls-row">
       <span class="filter-label">View:</span>
@@ -292,8 +320,12 @@
       <button class="pill active" id="btnMensual" onclick="setPeriod('mensual',this)">Monthly</button>
       <button class="pill" id="btnSemanal" onclick="setPeriod('semanal',this)">Weekly</button>
       <div class="controls-sep"></div>
-      <div class="daily-date-filter" id="dailyDateFilter" style="display:none">
-        <input id="dailyDateInput" type="date" aria-label="Select daily date" onchange="onDailyDateChange()">
+      <div class="date-range-filter" id="dailyDateFilter" style="display:none">
+        <input id="dailyMonthInput" type="month" aria-label="Select month" title="Show one month" onchange="onDailyMonthChange()">
+        <span class="filter-label">or</span>
+        <input id="dailyStartInput" type="date" aria-label="Start date" title="Start date" onchange="onDailyRangeChange()">
+        <span class="filter-label">to</span>
+        <input id="dailyEndInput" type="date" aria-label="End date" title="End date" onchange="onDailyRangeChange()">
         <button class="clear-date-btn" type="button" onclick="clearDailyDate()">All Days</button>
       </div>
       <div class="multi-filter" id="filterSelect" style="display:none">
@@ -568,9 +600,13 @@ let DATA_BY_PERIOD = { general:{}, mensual:{}, semanal:{} };
 let hiddenLines = new Set();
 let currentView = 'trend';
 let currentPeriod = 'mensual';
-let currentDailyDate = '';
+let currentDailyStart = '';
+let currentDailyEnd = '';
+let currentDailyMonth = '';
 const PERIOD_SELECTIONS = { mensual:new Set(), semanal:new Set() };
 let chartInst = null;
+const TARGET_STORAGE_KEY = 'aoi-misjudgment-targets-v1';
+let TARGET_OVERRIDES = loadTargetOverrides();
 const AUTO_REFRESH_MS = 60000;
 let autoRefreshTimer = null;
 let dataSourceUnlocked = false;
@@ -641,6 +677,66 @@ function normalizePercent(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function loadTargetOverrides() {
+  try {
+    const saved=JSON.parse(localStorage.getItem(TARGET_STORAGE_KEY)||'{}');
+    return saved && typeof saved==='object' ? saved : {};
+  } catch (_) { return {}; }
+}
+
+function getSheetTarget(line) {
+  for (const period of ['general','mensual','semanal']) {
+    const value=DATA_BY_PERIOD[period]?.[line]?.sheetTarget;
+    if (Number.isFinite(value)) return value;
+    const fallback=DATA_BY_PERIOD[period]?.[line]?.target;
+    if (Number.isFinite(fallback)) return fallback;
+  }
+  return 0;
+}
+
+function getTarget(line) {
+  const override=Number(TARGET_OVERRIDES[line]);
+  return Number.isFinite(override) ? override : getSheetTarget(line);
+}
+
+function applyTargetOverrides() {
+  Object.values(DATA_BY_PERIOD).forEach(period=>Object.entries(period).forEach(([line,item])=>{
+    if (!Number.isFinite(item.sheetTarget)) item.sheetTarget=Number(item.target)||0;
+    item.target=getTarget(line);
+  }));
+}
+
+function buildTargetSettings() {
+  const grid=document.getElementById('targetGrid');
+  if(!grid)return;
+  const available=[...new Set(Object.values(DATA_BY_PERIOD).flatMap(period=>Object.keys(period)))];
+  available.sort((a,b)=>a==='ALL'?1:b==='ALL'?-1:Number(a.replace('L',''))-Number(b.replace('L','')));
+  if(!available.length){grid.innerHTML='<span class="filter-label">Waiting for data…</span>';return;}
+  grid.innerHTML=available.map(line=>`<div class="target-field"><label for="target-${line}">${line} target (%)</label><input id="target-${line}" data-target-line="${line}" type="number" min="0" max="105" step="0.1" value="${getTarget(line)}"></div>`).join('');
+}
+
+function saveTargetSettings() {
+  document.querySelectorAll('[data-target-line]').forEach(input=>{
+    const value=Number(input.value);
+    if(Number.isFinite(value)&&value>=0&&value<=105) TARGET_OVERRIDES[input.dataset.targetLine]=value;
+  });
+  localStorage.setItem(TARGET_STORAGE_KEY,JSON.stringify(TARGET_OVERRIDES));
+  applyTargetOverrides();
+  buildAll();
+  const status=document.getElementById('targetSaveStatus');
+  status.textContent='Targets saved.';
+  setTimeout(()=>status.textContent='',2500);
+}
+
+function resetTargetSettings() {
+  TARGET_OVERRIDES={};
+  localStorage.removeItem(TARGET_STORAGE_KEY);
+  Object.values(DATA_BY_PERIOD).forEach(period=>Object.values(period).forEach(item=>{if(Number.isFinite(item.sheetTarget))item.target=item.sheetTarget;}));
+  buildTargetSettings();
+  buildAll();
+  document.getElementById('targetSaveStatus').textContent='Sheet targets restored.';
+}
+
 function parsePeriodCSV(text, period) {
   const rows = parseCSVRows(text);
   if (rows.length < 2) return {};
@@ -653,7 +749,8 @@ function parsePeriodCSV(text, period) {
     const line=String(row[0]||'').trim().toUpperCase();
     const content=String(row[3]||'').trim().toLowerCase();
     if (!/^(L([1-9]|1[0-3])|ALL)$/.test(line) || (!content.includes('ng') && !content.includes('mis'))) continue;
-    parsed[line]={ target:normalizePercent(row[2])||0, data:row.slice(4,4+dates.length).map(normalizePercent), dates };
+    const sheetTarget=normalizePercent(row[2])||0;
+    parsed[line]={ target:sheetTarget, sheetTarget, data:row.slice(4,4+dates.length).map(normalizePercent), dates };
   }
   return parsed;
 }
@@ -764,8 +861,12 @@ function buildFilterOptions() {
   })).filter(x=>x.label);
   const dailyDates=Object.values(DATA_BY_PERIOD.general)[0]?.dates||[];
   const isoDates=dailyDates.map(dateHeaderToIso).filter(Boolean).sort();
-  const dateInput=document.getElementById('dailyDateInput');
-  if(dateInput&&isoDates.length){dateInput.min=isoDates[0];dateInput.max=isoDates[isoDates.length-1];}
+  ['dailyStartInput','dailyEndInput'].forEach(id=>{
+    const input=document.getElementById(id);
+    if(input&&isoDates.length){input.min=isoDates[0];input.max=isoDates[isoDates.length-1];}
+  });
+  applyTargetOverrides();
+  buildTargetSettings();
 }
 
 function dateHeaderToIso(raw) {
@@ -832,9 +933,16 @@ function formatMonth(m) {
 }
 
 function getPeriodTitle() {
-  if (currentPeriod === 'general') return currentDailyDate?`Day ${currentDailyDate}`:'Daily';
+  if (currentPeriod === 'general') {
+    if(currentDailyMonth)return new Date(currentDailyMonth+'-01T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    if(currentDailyStart||currentDailyEnd)return `${currentDailyStart||'First day'} to ${currentDailyEnd||'Latest day'}`;
+    return 'Daily · All days';
+  }
   const count=PERIOD_SELECTIONS[currentPeriod]?.size||0;
-  if (currentPeriod === 'mensual') return count===1?'1 month':`${count} months`;
+  if (currentPeriod === 'mensual') {
+    const available=(window._months||[]).filter(x=>x.hasData).length;
+    return count&&count===available?'Year to date':count===1?'1 month':`${count} months`;
+  }
   if (currentPeriod === 'semanal') return count===1?'1 week':`${count} weeks`;
   return '';
 }
@@ -843,8 +951,15 @@ function getPeriodTitle() {
 function getFilteredData(line) {
   const { data, dates } = DATA[line];
   if (currentPeriod === 'general') {
-    if(!currentDailyDate)return {data,dates};
-    const indices=dates.reduce((acc,date,index)=>{if(dateHeaderToIso(date)===currentDailyDate)acc.push(index);return acc;},[]);
+    if(!currentDailyMonth&&!currentDailyStart&&!currentDailyEnd)return {data,dates};
+    const indices=dates.reduce((acc,date,index)=>{
+      const iso=dateHeaderToIso(date);
+      const inMonth=!currentDailyMonth||iso.startsWith(currentDailyMonth+'-');
+      const afterStart=!currentDailyStart||iso>=currentDailyStart;
+      const beforeEnd=!currentDailyEnd||iso<=currentDailyEnd;
+      if(iso&&inMonth&&afterStart&&beforeEnd)acc.push(index);
+      return acc;
+    },[]);
     return {data:indices.map(i=>data[i]),dates:indices.map(i=>dates[i])};
   }
   const selected=PERIOD_SELECTIONS[currentPeriod]||new Set();
@@ -857,14 +972,30 @@ function onFilterChange() {
   buildCurrentView();
 }
 
-function onDailyDateChange() {
-  currentDailyDate=document.getElementById('dailyDateInput').value;
+function onDailyMonthChange() {
+  currentDailyMonth=document.getElementById('dailyMonthInput').value;
+  currentDailyStart=''; currentDailyEnd='';
+  document.getElementById('dailyStartInput').value='';
+  document.getElementById('dailyEndInput').value='';
+  onFilterChange();
+}
+
+function onDailyRangeChange() {
+  currentDailyStart=document.getElementById('dailyStartInput').value;
+  currentDailyEnd=document.getElementById('dailyEndInput').value;
+  if(currentDailyStart&&currentDailyEnd&&currentDailyStart>currentDailyEnd){
+    [currentDailyStart,currentDailyEnd]=[currentDailyEnd,currentDailyStart];
+    document.getElementById('dailyStartInput').value=currentDailyStart;
+    document.getElementById('dailyEndInput').value=currentDailyEnd;
+  }
+  currentDailyMonth='';
+  document.getElementById('dailyMonthInput').value='';
   onFilterChange();
 }
 
 function clearDailyDate() {
-  currentDailyDate='';
-  document.getElementById('dailyDateInput').value='';
+  currentDailyStart=''; currentDailyEnd=''; currentDailyMonth='';
+  ['dailyMonthInput','dailyStartInput','dailyEndInput'].forEach(id=>document.getElementById(id).value='');
   onFilterChange();
 }
 
@@ -1025,7 +1156,7 @@ function buildTrend() {
     document.getElementById('trendView').innerHTML = '<div class="chart-wrap"><canvas id="mainChart" role="img" aria-label="Tasa Misjusdments por línea"></canvas></div>';
   }
 
-  const datasets = ls.map((l,i) => {
+  const lineDatasets = ls.map((l,i) => {
     const fd = getFilteredData(l);
     const seriesColor = l==='ALL' ? '#6d5dfc' : COLORS[i%COLORS.length];
     return {
@@ -1037,6 +1168,15 @@ function buildTrend() {
       tension: 0.3, hidden: hiddenLines.has(l)
     };
   });
+  const targetDatasets = ls.map((l,i)=>{
+    const seriesColor=l==='ALL'?'#6d5dfc':COLORS[i%COLORS.length];
+    return {
+      label:`${l} target`,data:labels.map(()=>getTarget(l)),borderColor:seriesColor,backgroundColor:'transparent',
+      borderWidth:l==='ALL'?2:1.2,borderDash:[7,6],pointRadius:0,pointHoverRadius:0,tension:0,
+      hidden:hiddenLines.has(l),isTarget:true,order:2
+    };
+  });
+  const datasets=[...lineDatasets,...targetDatasets];
 
   if(chartInst){chartInst.destroy();chartInst=null;}
   chartInst = new Chart(document.getElementById('mainChart'),{
@@ -1045,7 +1185,7 @@ function buildTrend() {
       responsive:true, maintainAspectRatio:false,
       plugins:{
         legend:{display:false},
-        tooltip:{mode:'index',intersect:false,
+        tooltip:{mode:'index',intersect:false,filter:item=>!item.dataset.isTarget,
           callbacks:{label:ctx=>` ${ctx.dataset.label}: ${Number.isFinite(ctx.parsed.y)?ctx.parsed.y.toFixed(1)+'%':'Sin dato'}`}
         },
         title:{
@@ -1100,7 +1240,7 @@ function buildHeat() {
   if (currentPeriod === 'general') {
     const fd=getFilteredData(ls[0]);
     columns=fd.dates.map((date,index)=>({label:date,localIndex:index}));
-    titleNote=currentDailyDate?'Daily heatmap for the selected date.':'Daily heatmap · scroll horizontally to explore all dates.';
+    titleNote=(currentDailyMonth||currentDailyStart||currentDailyEnd)?'Daily heatmap for the selected period.':'Daily heatmap · scroll horizontally to explore all dates.';
   } else {
     const fd = getFilteredData(ls[0]);
     columns = fd.dates.map((d,idx) => ({ label: d, localIndex: idx }));

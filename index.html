@@ -60,6 +60,7 @@
   .controls-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 1rem; }
   .controls-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
   .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 1rem; }
+  .legend-prompt { width:100%;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:1px; }
   .legend-item { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; color: var(--text2); padding: 3px 6px; border-radius: 4px; }
   .legend-item.hidden { opacity: 0.35; }
   .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
@@ -598,6 +599,7 @@ const TEMPLATE_OPTIONAL_OBJECTS = [
 let DATA = {};
 let DATA_BY_PERIOD = { general:{}, mensual:{}, semanal:{} };
 let hiddenLines = new Set();
+let lineVisibilityInitialized = false;
 let currentView = 'trend';
 let currentPeriod = 'mensual';
 let currentDailyStart = '';
@@ -1100,6 +1102,10 @@ function buildInsights() {
 }
 
 function buildAll() {
+  if(!lineVisibilityInitialized&&lines().length){
+    hiddenLines=new Set(lines().filter(line=>line!=='ALL'));
+    lineVisibilityInitialized=true;
+  }
   updateFilterSelect();
   buildKPI();
   buildLegend();
@@ -1130,7 +1136,7 @@ function buildKPI() {
 }
 
 function buildLegend() {
-  document.getElementById('legendBox').innerHTML = lines().map((l,i)=>
+  document.getElementById('legendBox').innerHTML = '<span class="legend-prompt">Select a line:</span>' + lines().map((l,i)=>
     `<div class="legend-item ${hiddenLines.has(l)?'hidden':''}" onclick="toggleLine('${l}')">
       <span class="legend-dot" style="background:${l==='ALL'?'#6d5dfc':COLORS[i%COLORS.length]}"></span><span class="${l==='ALL'?'all-highlight':''}">${l}</span></div>`
   ).join('');
